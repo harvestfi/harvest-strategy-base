@@ -22,7 +22,7 @@ module.exports = {
       forking: {
         // url: `https://damp-light-sheet.base-mainnet.discover.quiknode.pro/1dd5b147969e3eb19f572b39b3f4b587fdc8629d`,
         url: `https://developer-access-mainnet.base.org`,
-        // blockNumber: 79985280, // <-- edit here
+        blockNumber: 2185300, // <-- edit here
       },
     },
     mainnet: {

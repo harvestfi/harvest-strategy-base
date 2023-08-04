@@ -1,8 +1,8 @@
 module.exports = {
   "Storage": "0x98E03c6Ed7374F1e58FF022f1D2D8239526E13F9",
   "RewardForwarder": "0x88937abfc8C6A88cc70bfc686E4fBba80DE8d329",
-  "UniversalLiquidator": "0x0000000000000000000000000000000000000000",
-  "UniversalLiquidatorRegistry": "0x0000000000000000000000000000000000000000",
+  "UniversalLiquidator": "0x589Ff9f1E9f517b232808280c46a64a36Ac557d5",
+  "UniversalLiquidatorRegistry": "0x07d212988ECDf8d2c2Ab448114685CE5fDf07a4C",
   "Controller": "0xF90FF0F7c8Db52bF1bF869F74226eAD125EFa745",
   "Governance": "0x6a74649aCFD7822ae8Fb78463a9f2192752E5Aa2",
   "FARM": "0xD08a2917653d4E460893203471f0000826fb4034",
@@ -13,9 +13,9 @@ module.exports = {
   "ProfitShare": "0xCD719739C3Ece8b576D649BE97195aD03e676a2c",
   "Reader": "0x061886648F40C3F38bAdF2f64705bFDF0F6B12b3",
   "Factory": {
-    "VaultFactory": "0x99AFf7327CEb88fE408d1fB93dc3150fEa5f9A2A",
-    "PotPoolFactory": "0xC0cE53f755feAe93Fd219b2Cd0F58a4Fd0d535Dd",
-    "MegaFactory": "0x9c0F3393e3c0df870F7B1878bc9a5D313665a891",
-    "UpgradableStrategyFactory": "0x8F0d40c95047c6B09f08905C110d002E65e96C7d"
+    "VaultFactory": "0x9c0F3393e3c0df870F7B1878bc9a5D313665a891",
+    "PotPoolFactory": "0x8F0d40c95047c6B09f08905C110d002E65e96C7d",
+    "MegaFactory": "0x11cb7edA79C3B5f55B2BB501EB0Cf2d605259cf3",
+    "UpgradableStrategyFactory": "0x583f12edCcb5F1e27e5F493006B6D18FeD7Fce77"
   }
 };

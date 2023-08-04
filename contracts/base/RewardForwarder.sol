@@ -10,7 +10,7 @@ import "./interface/IController.sol";
 import "./interface/IRewardForwarder.sol";
 import "./interface/IProfitSharingReceiver.sol";
 import "./interface/IStrategy.sol";
-import "./interface/IUniversalLiquidatorV1.sol";
+import "./interface/IUniversalLiquidator.sol";
 import "./inheritance/Controllable.sol";
 
 /**
@@ -54,23 +54,14 @@ contract RewardForwarder is Controllable {
 
         address _targetToken = IController(_controller).targetToken();
 
-        if (_targetToken != _token) {
+        if (_token != _targetToken) {
             IERC20(_token).safeApprove(liquidator, 0);
             IERC20(_token).safeApprove(liquidator, totalTransferAmount);
 
             uint amountOutMin = 1;
 
-            if (_strategistFee > 0) {
-                IUniversalLiquidatorV1(liquidator).swapTokens(
-                    _token,
-                    _targetToken,
-                    _strategistFee,
-                    amountOutMin,
-                    IStrategy(msg.sender).strategist()
-                );
-            }
             if (_platformFee > 0) {
-                IUniversalLiquidatorV1(liquidator).swapTokens(
+                IUniversalLiquidator(liquidator).swap(
                     _token,
                     _targetToken,
                     _platformFee,
@@ -79,7 +70,7 @@ contract RewardForwarder is Controllable {
                 );
             }
             if (_profitSharingFee > 0) {
-                IUniversalLiquidatorV1(liquidator).swapTokens(
+                IUniversalLiquidator(liquidator).swap(
                     _token,
                     _targetToken,
                     _profitSharingFee,
@@ -87,10 +78,21 @@ contract RewardForwarder is Controllable {
                     IController(_controller).profitSharingReceiver()
                 );
             }
+            if (_strategistFee > 0) {
+                IUniversalLiquidator(liquidator).swap(
+                    _token,
+                    _targetToken,
+                    _strategistFee,
+                    amountOutMin,
+                    IStrategy(msg.sender).strategist()
+                );
+            }
         } else {
-            IERC20(_targetToken).safeTransfer(IStrategy(msg.sender).strategist(), _strategistFee);
-            IERC20(_targetToken).safeTransfer(IController(_controller).protocolFeeReceiver(), _platformFee);
+            if (_strategistFee > 0) {
+                IERC20(_targetToken).safeTransfer(IStrategy(msg.sender).strategist(), _strategistFee);
+            }
             IERC20(_targetToken).safeTransfer(IController(_controller).profitSharingReceiver(), _profitSharingFee);
+            IERC20(_targetToken).safeTransfer(IController(_controller).protocolFeeReceiver(), _platformFee);
         }
     }
 }

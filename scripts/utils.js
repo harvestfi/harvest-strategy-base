@@ -1,8 +1,8 @@
 async function getFeeData() {
   const feeData = await ethers.provider.getFeeData();
-  feeData.maxPriorityFeePerGas = 1e8;
-  if (feeData.maxFeePerGas > 10e9) {
-    feeData.maxFeePerGas = 10e9;
+  feeData.maxPriorityFeePerGas = 1e9;
+  if (feeData.maxFeePerGas > 50e9) {
+    feeData.maxFeePerGas = 50e9;
   }
   return feeData;
 }
@@ -20,8 +20,9 @@ async function type2Transaction(callFunction, ...params) {
     from: unsignedTx.from,
     to: unsignedTx.to,
     data: unsignedTx.data,
-    gasPrice: 1e8,
-    gasLimit: 80e6
+    maxFeePerGas: feeData.maxFeePerGas,
+    maxPriorityFeePerGas: feeData.maxPriorityFeePerGas,
+    gasLimit: 7e6
   });
   await tx.wait();
   return tx;

@@ -1,9 +1,9 @@
 const makeVault = require("./make-vault.js");
 const addresses = require("../test-config.js");
 const IController = artifacts.require("IController");
-const IFeeRewardForwarder = artifacts.require("IFeeRewardForwarder");
 const Vault = artifacts.require("VaultV2");
 const IUpgradeableStrategy = artifacts.require("IUpgradeableStrategy");
+const ILiquidatorRegistry = artifacts.require("IUniversalLiquidatorRegistry");
 
 const Utils = require("./Utils.js");
 
@@ -27,7 +27,7 @@ async function setupCoreProtocol(config) {
     vault = await Vault.at(config.existingVaultAddress);
     console.log("Fetching Vault at: ", vault.address);
   } else {
-    const implAddress = config.vaultImplementationOverride || addresses.VaultImplementationV2;
+    const implAddress = config.vaultImplementationOverride || addresses.VaultImplementation;
     vault = await makeVault(implAddress, addresses.Storage, config.underlying.address, 100, 100, {
       from: config.governance,
     });
@@ -35,31 +35,6 @@ async function setupCoreProtocol(config) {
   }
 
   controller = await IController.at(addresses.Controller);
-  feeRewardForwarder = await IFeeRewardForwarder.at(await controller.feeRewardForwarder());
-
-
-  if (config.feeRewardForwarder) {/*
-    const FeeRewardForwarder = artifacts.require("FeeRewardForwarder");
-    const feeRewardForwarder = await FeeRewardForwarder.new(
-      addresses.Storage,
-      addresses.FARM,
-      addresses.miFARM,
-      addresses.UniversalLiquidatorRegistry
-    );
-
-    config.feeRewardForwarder = feeRewardForwarder.address;*/
-    console.log("Setting up a custom fee reward forwarder...");
-    await controller.setFeeRewardForwarder(
-      config.feeRewardForwarder,
-      { from: config.governance }
-    );
-
-    const NoMintRewardPool = artifacts.require("NoMintRewardPool");
-    const farmRewardPool = await NoMintRewardPool.at("0x8f5adC58b32D4e5Ca02EAC0E293D35855999436C");
-    await farmRewardPool.setRewardDistribution(config.feeRewardForwarder, {from: config.governance});
-
-    console.log("Done setting up fee reward forwarder!");
-  }
 
   let rewardPool = null;
 
@@ -110,6 +85,20 @@ async function setupCoreProtocol(config) {
     console.log("Fetching Reward Pool deployed: ", rewardPool.address);
   }
 
+  let universalLiquidatorRegistry = await ILiquidatorRegistry.at(addresses.UniversalLiquidatorRegistry);
+
+  // set liquidation paths
+  if(config.liquidation) {
+    for (i=0;i<config.liquidation.length;i++) {
+      dex = Object.keys(config.liquidation[i])[0];
+      await universalLiquidatorRegistry.setPath(
+        web3.utils.keccak256(dex),
+        config.liquidation[i][dex],
+        {from: config.ULOwner}
+      );
+    }
+  }
+
   // default arguments are storage and vault addresses
   config.strategyArgs = config.strategyArgs || [
     addresses.Storage,
@@ -149,18 +138,6 @@ async function setupCoreProtocol(config) {
 
   console.log("Strategy Deployed: ", strategy.address);
 
-  if (config.liquidationPath) {
-    const path = config.liquidationPath.path;
-    const router = addresses[config.liquidationPath.router];
-    await feeRewardForwarder.setConversionPath(
-      path[0],
-      path[path.length - 1],
-      path,
-      router,
-      {from: config.governance}
-    );
-  }
-
   if (config.announceStrategy === true) {
     // Announce switch, time pass, switch to strategy
     await vault.announceStrategyUpdate(strategy.address, { from: config.governance });
@@ -180,20 +157,14 @@ async function setupCoreProtocol(config) {
     strategy = await config.strategyArtifact.at(await vault.strategy());
     console.log("Strategy upgrade completed.");
   } else {
-    await controller.addVaultAndStrategy(
-      vault.address,
-      strategy.address,
-      { from: config.governance }
-    );
-    console.log("Strategy and vault added to Controller.");
+    await vault.setStrategy(strategy.address, {from: config.governance});
   }
-
   return [controller, vault, strategy, rewardPool];
 }
 
 async function depositVault(_farmer, _underlying, _vault, _amount) {
   await _underlying.approve(_vault.address, _amount, { from: _farmer });
-  await _vault.deposit(_amount, { from: _farmer });
+  await _vault.deposit(_amount, _farmer, { from: _farmer });
 }
 
 module.exports = {
