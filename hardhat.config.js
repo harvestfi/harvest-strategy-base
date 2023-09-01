@@ -20,14 +20,12 @@ module.exports = {
       },
       chainId: 8453,
       forking: {
-        // url: `https://damp-light-sheet.base-mainnet.discover.quiknode.pro/1dd5b147969e3eb19f572b39b3f4b587fdc8629d`,
-        url: `https://developer-access-mainnet.base.org`,
-        blockNumber: 2185300, // <-- edit here
+        url: `https://base-mainnet.g.alchemy.com/v2/${secret.alchemyKey}`,
+        blockNumber: 3360500, // <-- edit here
       },
     },
     mainnet: {
-      // url: `https://damp-light-sheet.base-mainnet.discover.quiknode.pro/1dd5b147969e3eb19f572b39b3f4b587fdc8629d`,
-      url: `https://developer-access-mainnet.base.org`,
+      url: `https://base-mainnet.g.alchemy.com/v2/${secret.alchemyKey}`,
       accounts: {
         mnemonic: secret.mnemonic,
       },
