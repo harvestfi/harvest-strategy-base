@@ -6,6 +6,10 @@ interface Gauge {
     function balanceOf(address) external view returns (uint);
     function withdraw(uint) external;
     function user_checkpoint(address) external;
+    function lp_token() external view returns (address);
+    function claim_rewards() external;
+    function factory() external view returns (address);
+    function claimable_reward(address _user, address _reward_token) external view returns (uint256);
 }
 
 interface VotingEscrow {

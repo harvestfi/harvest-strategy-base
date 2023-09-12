@@ -12,9 +12,16 @@ module.exports = {
   "CommunityMsig": "0x97b3e5712CDE7Db13e939a188C8CA90Db5B05131",
   "ProfitShare": "0xCD719739C3Ece8b576D649BE97195aD03e676a2c",
   "Reader": "0x061886648F40C3F38bAdF2f64705bFDF0F6B12b3",
+  "Incentives": {
+    "GlobalIncentivesExecutor": "0xC69171Ab8722e511bc41B68bc7463Bd89Eff476b",
+    "GlobalIncentivesHelper": "0x84891022D6F0d478C1AA59a336aAAF555b3dA093",
+    "NotifyHelperGeneric": "0xF69058ab88F4Cb5F49B35b012ED4106a760aE746",
+    "NotifyHelperStateful": "0x43285eF3244300fe7Ed5b41E24B5953CaF7aC58D",
+    "ViewerNotifyHelperStateful": "0x7Ce0B2272776e437B28C64D75C2C94C27d4c6161",
+  },
   "Factory": {
     "VaultFactory": "0x9c0F3393e3c0df870F7B1878bc9a5D313665a891",
-    "PotPoolFactory": "0x8F0d40c95047c6B09f08905C110d002E65e96C7d",
+    "PotPoolFactory": "0x68B2FC1566f411C1Af8fF5bFDA3dD4F3F3e59D03",
     "MegaFactory": "0x11cb7edA79C3B5f55B2BB501EB0Cf2d605259cf3",
     "UpgradableStrategyFactory": "0x583f12edCcb5F1e27e5F493006B6D18FeD7Fce77"
   }
