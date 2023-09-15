@@ -12,19 +12,23 @@ const BigNumber = require("bignumber.js");
 const IERC20 = artifacts.require("IERC20");
 
 //const Strategy = artifacts.require("");
-const Strategy = artifacts.require("MoonwellFoldStrategyMainnet_USDC");
+const Strategy = artifacts.require("BasedStrategyMainnet_BASED_ETH_mock");
 
-// Developed and tested at blockNumber 3969300
+// Developed and tested at blockNumber 3967430
 
 // Vanilla Mocha test. Increased compatibility with tools that integrate Mocha.
-describe("Arbitrum Mainnet Moonwell Fold USDC", function() {
+describe("Arbitrum Mainnet Based BASED-ETH", function() {
   let accounts;
 
   // external contracts
   let underlying;
 
   // external setup
-  let underlyingWhale = "0x9490f96b0b5B56827D531b5c068bd730adc6591C";
+  let underlyingWhale = "0x0B6945643526d3114B875A4bc3356026aBc05E84";
+  let bshare = "0x8BE49607832a299FA33eE837038418ad0223333e";
+  let weth = "0x4200000000000000000000000000000000000006";
+  let based_mock = "0xfb3E929baB9796D2bee7Cd15Ab7954533D899DaD";
+  let weth_mock = "0x27DCB425C7005DD7558F9583797edA39A8D70ABd";
 
   // parties in the protocol
   let governance;
@@ -39,7 +43,7 @@ describe("Arbitrum Mainnet Moonwell Fold USDC", function() {
   let strategy;
 
   async function setupExternalContracts() {
-    underlying = await IERC20.at("0xd9aAEc86B65D86f6A7B5B1b0c42FFA531710b6CA");
+    underlying = await IERC20.at("0xF4ecEbFe039e4bce40226663F54F8d1Edce80B2b");
     console.log("Fetching Underlying at: ", underlying.address);
   }
 
@@ -65,12 +69,16 @@ describe("Arbitrum Mainnet Moonwell Fold USDC", function() {
 
     await setupExternalContracts();
     [controller, vault, strategy] = await setupCoreProtocol({
-      "existingVaultAddress": "0xc4F28CAE78550b4d85d6F928805483cEE3bcB3E5",
+      "existingVaultAddress": null,
       "strategyArtifact": Strategy,
       "strategyArtifactIsUpgradable": true,
-      "upgradeStrategy": true,
       "underlying": underlying,
       "governance": governance,
+      "liquidation": [
+        {"aerodrome": [bshare, weth_mock, weth]},
+        {"aerodrome": [bshare, weth_mock, based_mock]},
+        {"aerodrome": [bshare, weth_mock]},
+      ]
     });
 
     // whale send underlying to farmers
@@ -103,10 +111,6 @@ describe("Arbitrum Mainnet Moonwell Fold USDC", function() {
 
         console.log("instant APR:", apr*100, "%");
         console.log("instant APY:", (apy-1)*100, "%");
-
-        await vault.withdraw((new BigNumber(await vault.balanceOf(farmer1)).div(2)).toFixed(), {from: farmer1});
-        farmerBalance = new BigNumber(await underlying.balanceOf(farmer1));
-        await depositVault(farmer1, underlying, vault, farmerBalance);  
 
         await Utils.advanceNBlock(blocksPerHour);
       }

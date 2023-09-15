@@ -12,19 +12,19 @@ const BigNumber = require("bignumber.js");
 const IERC20 = artifacts.require("IERC20");
 
 //const Strategy = artifacts.require("");
-const Strategy = artifacts.require("MoonwellFoldStrategyMainnet_USDC");
+const Strategy = artifacts.require("BasedStrategyV2Mainnet_bSHARE_ETH");
 
-// Developed and tested at blockNumber 3969300
+// Developed and tested at blockNumber 3983500
 
 // Vanilla Mocha test. Increased compatibility with tools that integrate Mocha.
-describe("Arbitrum Mainnet Moonwell Fold USDC", function() {
+describe("Arbitrum Mainnet Based bSHARE-ETH", function() {
   let accounts;
 
   // external contracts
   let underlying;
 
   // external setup
-  let underlyingWhale = "0x9490f96b0b5B56827D531b5c068bd730adc6591C";
+  let underlyingWhale = "0x04c2e657CB2b0D86D7129819808430d889Ed2660";
 
   // parties in the protocol
   let governance;
@@ -39,7 +39,7 @@ describe("Arbitrum Mainnet Moonwell Fold USDC", function() {
   let strategy;
 
   async function setupExternalContracts() {
-    underlying = await IERC20.at("0xd9aAEc86B65D86f6A7B5B1b0c42FFA531710b6CA");
+    underlying = await IERC20.at("0xbE23ce31C665225E27521D3d7DB9Bb7E5A76aeb8");
     console.log("Fetching Underlying at: ", underlying.address);
   }
 
@@ -65,10 +65,9 @@ describe("Arbitrum Mainnet Moonwell Fold USDC", function() {
 
     await setupExternalContracts();
     [controller, vault, strategy] = await setupCoreProtocol({
-      "existingVaultAddress": "0xc4F28CAE78550b4d85d6F928805483cEE3bcB3E5",
+      "existingVaultAddress": null,
       "strategyArtifact": Strategy,
       "strategyArtifactIsUpgradable": true,
-      "upgradeStrategy": true,
       "underlying": underlying,
       "governance": governance,
     });
@@ -103,10 +102,6 @@ describe("Arbitrum Mainnet Moonwell Fold USDC", function() {
 
         console.log("instant APR:", apr*100, "%");
         console.log("instant APY:", (apy-1)*100, "%");
-
-        await vault.withdraw((new BigNumber(await vault.balanceOf(farmer1)).div(2)).toFixed(), {from: farmer1});
-        farmerBalance = new BigNumber(await underlying.balanceOf(farmer1));
-        await depositVault(farmer1, underlying, vault, farmerBalance);  
 
         await Utils.advanceNBlock(blocksPerHour);
       }

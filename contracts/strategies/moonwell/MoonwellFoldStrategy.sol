@@ -340,6 +340,7 @@ contract MoonwellFoldStrategy is BaseUpgradeableStrategy {
     makingFlashWithdrawal = true;
     IBVault(bVault).flashLoan(address(this), tokens, amounts, userData);
     makingFlashWithdrawal = false;
+    _redeem(amount);
   }
 
   function receiveFlashLoan(IERC20[] memory /*tokens*/, uint256[] memory amounts, uint256[] memory feeAmounts, bytes memory /*userData*/) external {
@@ -361,7 +362,6 @@ contract MoonwellFoldStrategy is BaseUpgradeableStrategy {
       _repay(repaying);
       _redeem(toRepay);
     }
-    balance = IERC20(_underlying).balanceOf(address(this));
     IERC20(_underlying).safeTransfer(bVault, toRepay);
   }
 

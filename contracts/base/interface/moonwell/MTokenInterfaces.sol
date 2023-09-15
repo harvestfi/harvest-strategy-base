@@ -19,7 +19,6 @@ contract MTokenStorage {
     /// @notice EIP-20 token decimals for this token
     uint8 public decimals;
 
-    /// @notice Maximum borrow rate that can ever be applied (.0005% / block)
     uint internal constant borrowRateMaxMantissa = 0.0005e16;
 
     // @notice Maximum fraction of interest that can be set aside for reserves
@@ -58,10 +57,8 @@ contract MTokenStorage {
     /// @notice Total number of tokens in circulation
     uint public totalSupply;
 
-    /// @notice Official record of token balances for each account
     mapping (address => uint) internal accountTokens;
 
-    /// @notice Approved token transfer amounts on behalf of others
     mapping (address => mapping (address => uint)) internal transferAllowances;
 
     /**
