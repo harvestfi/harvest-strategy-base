@@ -8,6 +8,7 @@ import "../../base/interface/uniswap/IUniswapV2Router02.sol";
 import "../../base/interface/uniswap/IUniswapV2Pair.sol";
 import "../../base/interface/IUniversalLiquidator.sol";
 import "../../base/interface/IVault.sol";
+import "../../base/interface/IPotPool.sol";
 import "../../base/upgradability/BaseUpgradeableStrategy.sol";
 import "../../base/interface/baseswap/INFTPool.sol";
 
@@ -25,19 +26,25 @@ contract BaseSwapStrategyV2 is BaseUpgradeableStrategy {
 
   // additional storage slots (on top of BaseUpgradeableStrategy ones) are defined here
   bytes32 internal constant _POS_ID_SLOT = 0x025da88341279feed86c02593d3d75bb35ff95cb72e32ffd093929b008413de5;
+  bytes32 internal constant _XBSX_VAULT_SLOT = 0x8abf1b5d63d0e5b566db8e59e38bede77f3196b7ab8c79af0e40e70cb3811690;
+  bytes32 internal constant _POTPOOL_SLOT = 0x7f4b50847e7d7a4da6a6ea36bfb188c77e9f093697337eb9a876744f926dd014;
 
   // this would be reset on each upgrade
   address[] public rewardTokens;
 
   constructor() public BaseUpgradeableStrategy() {
     assert(_POS_ID_SLOT == bytes32(uint256(keccak256("eip1967.strategyStorage.posId")) - 1));
+    assert(_XBSX_VAULT_SLOT == bytes32(uint256(keccak256("eip1967.strategyStorage.xBSXVault")) - 1));
+    assert(_POTPOOL_SLOT == bytes32(uint256(keccak256("eip1967.strategyStorage.potPool")) - 1));
   }
 
   function initializeBaseStrategy(
     address _storage,
     address _underlying,
     address _vault,
-    address _nftPool
+    address _nftPool,
+    address _xBSXVault,
+    address _potPool
   ) public initializer {
 
     BaseUpgradeableStrategy.initialize(
@@ -45,12 +52,14 @@ contract BaseSwapStrategyV2 is BaseUpgradeableStrategy {
       _underlying,
       _vault,
       _nftPool,
-      weth,
+      bsx,
       harvestMSIG
     );
 
     (address _lpt,,,,,,,,,) = INFTPool(rewardPool()).getPoolInfo();
     require(_lpt == _underlying, "Underlying mismatch");
+    setAddress(_XBSX_VAULT_SLOT, _xBSXVault);
+    setAddress(_POTPOOL_SLOT, _potPool);
   }
 
   function depositArbCheck() public pure returns(bool) {
@@ -136,7 +145,7 @@ contract BaseSwapStrategyV2 is BaseUpgradeableStrategy {
     }
   }
 
-  function _liquidateReward() internal {
+  function _liquidateReward(uint256 _xBSXAmount) internal {
     if (!sell()) {
       // Profits can be disabled for possible simplified and rapid exit
       emit ProfitsNotCollected(sell(), false);
@@ -152,17 +161,23 @@ contract BaseSwapStrategyV2 is BaseUpgradeableStrategy {
         continue;
       }
       if (token != _rewardToken){
-          IERC20(token).safeApprove(_universalLiquidator, 0);
-          IERC20(token).safeApprove(_universalLiquidator, rewardBalance);
-          IUniversalLiquidator(_universalLiquidator).swap(token, _rewardToken, rewardBalance, 1, address(this));
+        IERC20(token).safeApprove(_universalLiquidator, 0);
+        IERC20(token).safeApprove(_universalLiquidator, rewardBalance);
+        IUniversalLiquidator(_universalLiquidator).swap(token, _rewardToken, rewardBalance, 1, address(this));
       }
     }
 
     uint256 rewardBalance = IERC20(_rewardToken).balanceOf(address(this));
-    _notifyProfitInRewardToken(_rewardToken, rewardBalance);
+    uint256 notifyBalance;
+    if (_xBSXAmount > rewardBalance.mul(9)) {
+      notifyBalance = rewardBalance.mul(10);
+    } else {
+      notifyBalance = rewardBalance.add(_xBSXAmount);
+    }
+    _notifyProfitInRewardToken(_rewardToken, notifyBalance);
     uint256 remainingRewardBalance = IERC20(_rewardToken).balanceOf(address(this));
-
     if (remainingRewardBalance == 0) {
+      _handleXBSX();
       return;
     }
 
@@ -210,6 +225,23 @@ contract BaseSwapStrategyV2 is BaseUpgradeableStrategy {
       address(this),
       block.timestamp
     );
+
+    _handleXBSX();
+  }
+
+  function _handleXBSX() internal {
+    uint256 balance = IERC20(xbsx).balanceOf(address(this));
+    if (balance == 0) { return; }
+    address _xBSXVault = xBSXVault();
+    address _potPool = potPool();
+
+    IERC20(xbsx).safeApprove(_xBSXVault, 0);
+    IERC20(xbsx).safeApprove(_xBSXVault, balance);
+    IVault(_xBSXVault).deposit(balance);
+
+    uint256 vaultBalance = IERC20(_xBSXVault).balanceOf(address(this));
+    IERC20(_xBSXVault).safeTransfer(_potPool, vaultBalance);
+    IPotPool(_potPool).notifyTargetRewardAmount(_xBSXVault, vaultBalance);
   }
 
   /*
@@ -218,7 +250,8 @@ contract BaseSwapStrategyV2 is BaseUpgradeableStrategy {
   function withdrawAllToVault() public restricted {
     _claimRewards();
     _withdrawUnderlyingFromPool(_rewardPoolBalance());
-    _liquidateReward();
+    uint256 xBSXReward = IERC20(xbsx).balanceOf(address(this));
+    _liquidateReward(xBSXReward);
     address underlying_ = underlying();
     IERC20(underlying_).safeTransfer(vault(), IERC20(underlying_).balanceOf(address(this)));
   }
@@ -277,7 +310,8 @@ contract BaseSwapStrategyV2 is BaseUpgradeableStrategy {
   */
   function doHardWork() external onlyNotPausedInvesting restricted {
     _claimRewards();
-    _liquidateReward();
+    uint256 xBSXReward = IERC20(xbsx).balanceOf(address(this));
+    _liquidateReward(xBSXReward);
     _investAllUnderlying();
   }
 
@@ -297,6 +331,24 @@ contract BaseSwapStrategyV2 is BaseUpgradeableStrategy {
     return getUint256(_POS_ID_SLOT);
   }
 
+  function setXBSXVault(address _value) public onlyGovernance {
+    require(xBSXVault() == address(0), "Hodl vault already set");
+    setAddress(_XBSX_VAULT_SLOT, _value);
+  }
+
+  function xBSXVault() public view returns (address) {
+    return getAddress(_XBSX_VAULT_SLOT);
+  }
+
+  function setPotPool(address _value) public onlyGovernance {
+    require(potPool() == address(0), "PotPool already set");
+    setAddress(_POTPOOL_SLOT, _value);
+  }
+
+  function potPool() public view returns (address) {
+    return getAddress(_POTPOOL_SLOT);
+  }
+
   bytes4 private constant _ERC721_RECEIVED = 0x150b7a02;
   function onERC721Received(address /*operator*/, address /*from*/, uint256 /*tokenId*/, bytes calldata /*data*/) external pure returns (bytes4) {
     return _ERC721_RECEIVED;
@@ -307,6 +359,7 @@ contract BaseSwapStrategyV2 is BaseUpgradeableStrategy {
   function onNFTWithdraw(address /*operator*/, uint256 /*tokenId*/, uint256 /*lpAmount*/) external pure returns (bool) {return true;}
 
   function finalizeUpgrade() external onlyGovernance {
+    _setRewardToken(bsx);
     _finalizeUpgrade();
   }
 }
