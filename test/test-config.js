@@ -12,6 +12,7 @@ module.exports = {
   "CommunityMsig": "0x97b3e5712CDE7Db13e939a188C8CA90Db5B05131",
   "ProfitShare": "0xCD719739C3Ece8b576D649BE97195aD03e676a2c",
   "Reader": "0x061886648F40C3F38bAdF2f64705bFDF0F6B12b3",
+  "ULOwner": "0x6a74649aCFD7822ae8Fb78463a9f2192752E5Aa2",
   "Incentives": {
     "GlobalIncentivesExecutor": "0xC69171Ab8722e511bc41B68bc7463Bd89Eff476b",
     "GlobalIncentivesHelper": "0x84891022D6F0d478C1AA59a336aAAF555b3dA093",
