@@ -17,7 +17,7 @@ const Strategy = artifacts.require("MoonwellFoldStrategyMainnet_USDC");
 // Developed and tested at blockNumber 4733000
 
 // Vanilla Mocha test. Increased compatibility with tools that integrate Mocha.
-describe("Arbitrum Mainnet Moonwell Fold USDC", function() {
+describe("Base Mainnet Moonwell Fold USDC", function() {
   let accounts;
 
   // external contracts
