@@ -4,7 +4,7 @@ pragma experimental ABIEncoderV2;
 
 import "./MoonwellFoldStrategy.sol";
 
-contract MoonwellFoldStrategyMainnet_USDC is MoonwellFoldStrategy {
+contract MoonwellFoldStrategyMainnet_USDbC is MoonwellFoldStrategy {
 
   constructor() public {}
 
@@ -12,8 +12,8 @@ contract MoonwellFoldStrategyMainnet_USDC is MoonwellFoldStrategy {
     address _storage,
     address _vault
   ) public initializer {
-    address underlying = address(0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913);
-    address mToken = address(0xEdc817A28E8B93B03976FBd4a3dDBc9f7D176c22);
+    address underlying = address(0xd9aAEc86B65D86f6A7B5B1b0c42FFA531710b6CA);
+    address mToken = address(0x703843C3379b52F9FF486c9f5892218d2a065cC8);
     address comptroller = address(0xfBb21d0380beE3312B33c4353c8936a0F13EF26C);
     address well = address(0xFF8adeC2221f9f4D8dfbAFa6B9a297d17603493D);
     MoonwellFoldStrategy.initializeBaseStrategy(

@@ -12,22 +12,20 @@ const BigNumber = require("bignumber.js");
 const IERC20 = artifacts.require("IERC20");
 
 //const Strategy = artifacts.require("");
-const Strategy = artifacts.require("MoonwellFoldStrategyMainnet_USDC");
+const Strategy = artifacts.require("MoonwellFoldStrategyMainnet_USDbC");
 
-// Developed and tested at blockNumber 4733000
+// Developed and tested at blockNumber 3969300
 
 // Vanilla Mocha test. Increased compatibility with tools that integrate Mocha.
-describe("Base Mainnet Moonwell Fold USDC", function() {
+describe("Arbitrum Mainnet Moonwell Fold USDbC", function() {
   let accounts;
 
   // external contracts
   let underlying;
 
   // external setup
-  let underlyingWhale = "0xCf58eaC3C7D16796Aea617a7E2461c99CaCDFf1D";
-  let well = "0xFF8adeC2221f9f4D8dfbAFa6B9a297d17603493D";
-  let weth = "0x4200000000000000000000000000000000000006";
-  
+  let underlyingWhale = "0x9490f96b0b5B56827D531b5c068bd730adc6591C";
+
   // parties in the protocol
   let governance;
   let farmer1;
@@ -41,7 +39,7 @@ describe("Base Mainnet Moonwell Fold USDC", function() {
   let strategy;
 
   async function setupExternalContracts() {
-    underlying = await IERC20.at("0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913");
+    underlying = await IERC20.at("0xd9aAEc86B65D86f6A7B5B1b0c42FFA531710b6CA");
     console.log("Fetching Underlying at: ", underlying.address);
   }
 
@@ -67,15 +65,12 @@ describe("Base Mainnet Moonwell Fold USDC", function() {
 
     await setupExternalContracts();
     [controller, vault, strategy] = await setupCoreProtocol({
-      "existingVaultAddress": null,
+      "existingVaultAddress": "0xc4F28CAE78550b4d85d6F928805483cEE3bcB3E5",
       "strategyArtifact": Strategy,
       "strategyArtifactIsUpgradable": true,
+      "upgradeStrategy": true,
       "underlying": underlying,
       "governance": governance,
-      "liquidation": [
-        {"aerodrome": [well, weth, underlying.address]},
-      ],
-      "ULOwner": addresses.ULOwner
     });
 
     // whale send underlying to farmers
