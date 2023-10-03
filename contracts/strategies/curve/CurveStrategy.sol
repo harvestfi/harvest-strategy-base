@@ -12,6 +12,8 @@ import "../../base/interface/curve/ICurveDeposit_2token.sol";
 import "../../base/interface/curve/ICurveDeposit_3token.sol";
 import "../../base/interface/curve/ICurveDeposit_4token.sol";
 
+import "hardhat/console.sol";
+
 contract CurveStrategy is BaseUpgradeableStrategy {
 
   using SafeMath for uint256;
@@ -134,6 +136,7 @@ contract CurveStrategy is BaseUpgradeableStrategy {
     address _rewardPool = rewardPool();
     address factory = Gauge(_rewardPool).factory();
     Mintr(factory).mint(_rewardPool);
+    Gauge(_rewardPool).claim_rewards();
   }
 
   function _liquidateReward() internal {
@@ -312,6 +315,13 @@ contract CurveStrategy is BaseUpgradeableStrategy {
   }
 
   function finalizeUpgrade() external onlyGovernance {
+    address _rewardPool = rewardPool();
+    address _crv = rewardToken();
+    address _gov = governance();
+    uint256 pendingCRV = Gauge(_rewardPool).claimable_reward(address(this), _crv);
+    IERC20(_crv).safeTransferFrom(_gov, _rewardPool, pendingCRV);
+    Gauge(_rewardPool).claim_rewards();
+    IERC20(_crv).safeTransfer(_gov, pendingCRV);
     _finalizeUpgrade();
   }
 }

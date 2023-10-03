@@ -26,6 +26,6 @@ contract CurveStrategyMainnet_4pool is CurveStrategy {
       3,
       4
     );
-    rewardTokens = [crv];
+    rewardTokens = [crv, crvusd];
   }
 }
