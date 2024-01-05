@@ -24,8 +24,8 @@ contract MoonwellFoldStrategyV2Mainnet_rETH is MoonwellFoldStrategyV2 {
       mToken,
       comptroller,
       usdc,
-      730,
-      750,
+      740,
+      760,
       1000,
       true
     );

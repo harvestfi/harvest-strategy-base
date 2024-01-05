@@ -254,6 +254,9 @@ contract MoonwellFoldStrategyV2 is BaseUpgradeableStrategy {
   * Supplies to Moonwel
   */
   function _supply(uint256 amount) internal {
+    if (amount == 0){
+      return;
+    }
     address _underlying = underlying();
     address _mToken = mToken();
     uint256 balance = IERC20(_underlying).balanceOf(address(this));
@@ -269,6 +272,9 @@ contract MoonwellFoldStrategyV2 is BaseUpgradeableStrategy {
   * Borrows against the collateral
   */
   function _borrow(uint256 amountUnderlying) internal {
+    if (amountUnderlying == 0){
+      return;
+    }
     // Borrow, check the balance for this contract's address
     MErc20Interface(mToken()).borrow(amountUnderlying);
     if(underlying() == weth){
@@ -277,6 +283,9 @@ contract MoonwellFoldStrategyV2 is BaseUpgradeableStrategy {
   }
 
   function _redeem(uint256 amountUnderlying) internal {
+    if (amountUnderlying == 0){
+      return;
+    }
     MErc20Interface(mToken()).redeemUnderlying(amountUnderlying);
     if(underlying() == weth){
       IWETH(weth).deposit{value: address(this).balance}();
@@ -284,6 +293,9 @@ contract MoonwellFoldStrategyV2 is BaseUpgradeableStrategy {
   }
 
   function _repay(uint256 amountUnderlying) internal {
+    if (amountUnderlying == 0){
+      return;
+    }
     address _underlying = underlying();
     address _mToken = mToken();
     IERC20(_underlying).safeApprove(_mToken, 0);
@@ -324,6 +336,17 @@ contract MoonwellFoldStrategyV2 is BaseUpgradeableStrategy {
       borrowDiff = 0;
     } else {
       borrowDiff = borrowTarget.sub(borrowed);
+      uint256 borrowCap = ComptrollerInterface(rewardPool()).borrowCaps(_mToken);
+      uint256 totalBorrows = MTokenInterface(_mToken).totalBorrows();
+      uint256 borrowAvail;
+      if (totalBorrows < borrowCap) {
+        borrowAvail = borrowCap.sub(totalBorrows).sub(1);
+      } else {
+        borrowAvail = 0;
+      }
+      if (borrowDiff > borrowAvail){
+        borrowDiff = borrowAvail;
+      }
     }
     address _underlying = underlying();
     uint256 balancerBalance = IERC20(_underlying).balanceOf(bVault);
@@ -354,7 +377,12 @@ contract MoonwellFoldStrategyV2 is BaseUpgradeableStrategy {
         uint256 newBalance = oldBalance.sub(amount);
         newBorrowTarget = newBalance.mul(borrowTargetFactorNumerator).div(factorDenominator().sub(borrowTargetFactorNumerator));
     }
-    uint256 borrowDiff = borrowed.sub(newBorrowTarget);
+    uint256 borrowDiff;
+    if (borrowed < newBorrowTarget) {
+      borrowDiff = 0;
+    } else {
+      borrowDiff = borrowed.sub(newBorrowTarget);
+    }
     address _underlying = underlying();
     uint256 balancerBalance = IERC20(_underlying).balanceOf(bVault);
 
@@ -399,6 +427,19 @@ contract MoonwellFoldStrategyV2 is BaseUpgradeableStrategy {
     address _underlying = underlying();
     uint256 balance = supplied.sub(borrowed);
     uint256 borrowTarget = balance.mul(_borrowNum).div(_denom.sub(_borrowNum));
+    {
+      uint256 borrowCap = ComptrollerInterface(rewardPool()).borrowCaps(_mToken);
+      uint256 totalBorrows = MTokenInterface(_mToken).totalBorrows();
+      uint256 borrowAvail;
+      if (totalBorrows < borrowCap) {
+        borrowAvail = borrowCap.sub(totalBorrows).sub(1);
+      } else {
+        borrowAvail = 0;
+      }
+      if (borrowTarget.sub(borrowed) > borrowAvail) {
+        borrowTarget = borrowed.add(borrowAvail);
+      }
+    }
     while (borrowed < borrowTarget) {
       uint256 wantBorrow = borrowTarget.sub(borrowed);
       uint256 maxBorrow = supplied.mul(collateralFactorNumerator()).div(_denom).sub(borrowed);
@@ -448,8 +489,8 @@ contract MoonwellFoldStrategyV2 is BaseUpgradeableStrategy {
   // updating collateral factor
   // note 1: one should settle the loan first before calling this
   // note 2: collateralFactorDenominator is 1000, therefore, for 20%, you need 200
-  function _setCollateralFactorNumerator(uint256 _numerator) internal {
-    require(_numerator <= uint(850).mul(factorDenominator()).div(1000), "Collateral factor cannot be this high");
+  function _setCollateralFactorNumerator(uint256 _numerator) public onlyGovernance {
+    require(_numerator <= factorDenominator(), "Collateral factor cannot be this high");
     require(_numerator > borrowTargetFactorNumerator(), "Collateral factor should be higher than borrow target");
     setUint256(_COLLATERALFACTORNUMERATOR_SLOT, _numerator);
   }
