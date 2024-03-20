@@ -13,6 +13,8 @@ import "../../base/interface/moonwell/ComptrollerInterface.sol";
 import "../../base/interface/balancer/IBVault.sol";
 import "../../base/interface/weth/IWETH.sol";
 
+import "hardhat/console.sol";
+
 contract MoonwellFoldStrategyV2 is BaseUpgradeableStrategy {
 
   using SafeMath for uint256;
@@ -186,7 +188,7 @@ contract MoonwellFoldStrategyV2 is BaseUpgradeableStrategy {
     _redeemWithFlashloan(
       amountUnderlying,
       fold()? borrowTargetFactorNumerator():0
-      );
+    );
     uint256 balanceAfter = IERC20(_underlying).balanceOf(address(this));
     require(balanceAfter.sub(balanceBefore) >= amountUnderlying, "Unable to withdraw the entire amountUnderlying");
   }
@@ -263,6 +265,15 @@ contract MoonwellFoldStrategyV2 is BaseUpgradeableStrategy {
     if (amount < balance) {
       balance = amount;
     }
+    uint256 supplyCap = ComptrollerInterface(rewardPool()).supplyCaps(_mToken);
+    uint256 currentSupplied = MTokenInterface(_mToken).totalSupply().mul(MTokenInterface(_mToken).exchangeRateCurrent()).div(1e18);
+    if (currentSupplied >= supplyCap) {
+      return;
+    } else if (supplyCap.sub(currentSupplied) <= balance) {
+      balance = supplyCap.sub(currentSupplied).sub(2);
+    }
+    console.log(supplyCap, currentSupplied);
+    console.log(balance);
     IERC20(_underlying).safeApprove(_mToken, 0);
     IERC20(_underlying).safeApprove(_mToken, balance);
     MErc20Interface(_mToken).mint(balance);
@@ -336,11 +347,19 @@ contract MoonwellFoldStrategyV2 is BaseUpgradeableStrategy {
       borrowDiff = 0;
     } else {
       borrowDiff = borrowTarget.sub(borrowed);
-      uint256 borrowCap = ComptrollerInterface(rewardPool()).borrowCaps(_mToken);
+      address _rewardPool = rewardPool();
+      uint256 supplyCap = ComptrollerInterface(_rewardPool).supplyCaps(_mToken);
+      uint256 currentSupplied = MTokenInterface(_mToken).totalSupply().mul(MTokenInterface(_mToken).exchangeRateCurrent()).div(1e18);
+      uint256 borrowCap = ComptrollerInterface(_rewardPool).borrowCaps(_mToken);
       uint256 totalBorrows = MTokenInterface(_mToken).totalBorrows();
       uint256 borrowAvail;
       if (totalBorrows < borrowCap) {
         borrowAvail = borrowCap.sub(totalBorrows).sub(1);
+        if (currentSupplied < supplyCap) {
+          borrowAvail = Math.min(supplyCap.sub(currentSupplied).sub(2), borrowAvail);
+        } else {
+          borrowAvail = 0;
+        }
       } else {
         borrowAvail = 0;
       }
@@ -406,15 +425,14 @@ contract MoonwellFoldStrategyV2 is BaseUpgradeableStrategy {
     require(!makingFlashDeposit || !makingFlashWithdrawal, "Only one can be true");
     require(makingFlashDeposit || makingFlashWithdrawal, "One has to be true");
     address _underlying = underlying();
-    uint256 balance = IERC20(_underlying).balanceOf(address(this));
     uint256 toRepay = amounts[0].add(feeAmounts[0]);
     if (makingFlashDeposit){
-      _supply(balance);
+      _supply(amounts[0]);
       _borrow(toRepay);
     } else {
       address _mToken = mToken();
       uint256 borrowed = MTokenInterface(_mToken).borrowBalanceCurrent(address(this));
-      uint256 repaying = Math.min(balance, borrowed);
+      uint256 repaying = Math.min(amounts[0], borrowed);
       IERC20(_underlying).safeApprove(_mToken, 0);
       IERC20(_underlying).safeApprove(_mToken, repaying);
       _repay(repaying);
@@ -428,11 +446,19 @@ contract MoonwellFoldStrategyV2 is BaseUpgradeableStrategy {
     uint256 balance = supplied.sub(borrowed);
     uint256 borrowTarget = balance.mul(_borrowNum).div(_denom.sub(_borrowNum));
     {
-      uint256 borrowCap = ComptrollerInterface(rewardPool()).borrowCaps(_mToken);
+      address _rewardPool = rewardPool();
+      uint256 supplyCap = ComptrollerInterface(_rewardPool).supplyCaps(_mToken);
+      uint256 currentSupplied = MTokenInterface(_mToken).totalSupply().mul(MTokenInterface(_mToken).exchangeRateCurrent()).div(1e18);
+      uint256 borrowCap = ComptrollerInterface(_rewardPool).borrowCaps(_mToken);
       uint256 totalBorrows = MTokenInterface(_mToken).totalBorrows();
       uint256 borrowAvail;
       if (totalBorrows < borrowCap) {
         borrowAvail = borrowCap.sub(totalBorrows).sub(1);
+        if (currentSupplied < supplyCap) {
+          borrowAvail = Math.min(supplyCap.sub(currentSupplied).sub(2), borrowAvail);
+        } else {
+          borrowAvail = 0;
+        }
       } else {
         borrowAvail = 0;
       }
