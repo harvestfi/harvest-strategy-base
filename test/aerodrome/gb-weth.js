@@ -76,8 +76,7 @@ describe("Arbitrum Mainnet Aerodrome GB-WETH", function() {
       "governance": governance,
       "liquidation": [
         {"aerodrome": [aero, weth]},
-        {"aerodrome": [gb, weth]},
-        {"aerodrome": [weth, gb]},
+        {"aerodrome": [aero, gb]},
       ],
       "ULOwner": addresses.ULOwner
     });

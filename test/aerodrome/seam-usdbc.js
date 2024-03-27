@@ -78,8 +78,6 @@ describe("Arbitrum Mainnet Aerodrome SEAM-USDbC", function() {
       "liquidation": [
         {"aerodrome": [aero, weth, seam]},
         {"aerodrome": [aero, usdbc]},
-        {"aerodrome": [usdbc, aero]},
-        {"aerodrome": [seam, usdbc]},
       ],
       "ULOwner": addresses.ULOwner
     });

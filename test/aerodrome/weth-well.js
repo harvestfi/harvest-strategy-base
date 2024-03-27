@@ -76,8 +76,7 @@ describe("Arbitrum Mainnet Aerodrome WETH_WELL", function() {
       "governance": governance,
       "liquidation": [
         {"aerodrome": [aero, weth]},
-        {"aerodrome": [well, weth]},
-        {"aerodrome": [weth, well]},
+        {"aerodrome": [aero, weth, well]},
       ],
       "ULOwner": addresses.ULOwner
     });

@@ -79,9 +79,7 @@ describe("Arbitrum Mainnet Aerodrome USDC-STAR", function() {
       "governance": governance,
       "liquidation": [
         {"aerodrome": [aero, usdc]},
-        {"aerodrome": [aero, usdc, usdbc, star]},
-        {"aerodrome": [star, usdbc, usdc, aero]},
-        {"aerodrome": [usdc, aero]},
+        {"aerodrome": [aero, usdc, usdbc, star]}
       ],
       "ULOwner": addresses.ULOwner
     });

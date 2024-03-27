@@ -27,7 +27,6 @@ describe("Arbitrum Mainnet Aerodrome USDC-USDbC", function() {
   let underlyingWhale = "0x996F7c241007dcEEa584ae035a45Cb6B98e8974C";
   let aero = "0x940181a94A35A4569E4529A3CDfB74e38FD98631";
   let usdc = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
-  let usdp = "0xB79DD08EA68A908A97220C76d19A6aA9cBDE4376";
   let usdbc = "0xd9aAEc86B65D86f6A7B5B1b0c42FFA531710b6CA";
 
   // parties in the protocol
@@ -78,8 +77,7 @@ describe("Arbitrum Mainnet Aerodrome USDC-USDbC", function() {
       "governance": governance,
       "liquidation": [
         {"aerodrome": [aero, usdc]},
-        {"aerodrome": [usdc, usdp]},
-        {"aerodrome": [usdp, usdbc]},
+        {"aerodrome": [aero, usdbc]},
       ],
       "ULOwner": addresses.ULOwner
     });

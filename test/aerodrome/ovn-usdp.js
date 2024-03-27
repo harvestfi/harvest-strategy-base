@@ -77,8 +77,7 @@ describe("Arbitrum Mainnet Aerodrome OVN-USDp", function() {
       "governance": governance,
       "liquidation": [
         {"aerodrome": [aero, usdc, usdp, ovn]},
-        {"aerodrome": [ovn, usdp, usdc, aero]},
-        {"aerodrome": [usdp, usdc, aero]},
+        {"aerodrome": [aero, usdc, usdp]},
       ],
       "ULOwner": addresses.ULOwner
     });
