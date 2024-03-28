@@ -26,8 +26,8 @@ describe("Arbitrum Mainnet Aerodrome SEAM-USDbC", function() {
   // external setup
   let underlyingWhale = "0x38063122aF96BDF0DB544eDfE1908A30609b6367";
   let aero = "0x940181a94A35A4569E4529A3CDfB74e38FD98631";
-  let seam = "0xA3d1a8DEB97B111454B294E2324EfAD13a9d8396";
-  let usdbc = "0xB79DD08EA68A908A97220C76d19A6aA9cBDE4376";
+  let seam = "0x1C7a460413dD4e964f96D8dFC56E7223cE88CD85";
+  let usdbc = "0xd9aAEc86B65D86f6A7B5B1b0c42FFA531710b6CA";
   let weth = "0x4200000000000000000000000000000000000006";
 
   // parties in the protocol
@@ -76,7 +76,7 @@ describe("Arbitrum Mainnet Aerodrome SEAM-USDbC", function() {
       "underlying": underlying,
       "governance": governance,
       "liquidation": [
-        {"aerodrome": [aero, weth, seam]},
+        {"aerodrome": [aero, usdbc, seam]},
         {"aerodrome": [aero, usdbc]},
       ],
       "ULOwner": addresses.ULOwner

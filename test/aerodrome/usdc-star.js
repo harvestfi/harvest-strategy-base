@@ -14,7 +14,7 @@ const IERC20 = artifacts.require("IERC20");
 //const Strategy = artifacts.require("");
 const Strategy = artifacts.require("AerodromeStableStrategyMainnet_USDC_STAR");
 
-// Developed and tested at blockNumber 12331740
+// Developed and tested at blockNumber 12379775
 
 // Vanilla Mocha test. Increased compatibility with tools that integrate Mocha.
 describe("Arbitrum Mainnet Aerodrome USDC-STAR", function() {
@@ -79,7 +79,7 @@ describe("Arbitrum Mainnet Aerodrome USDC-STAR", function() {
       "governance": governance,
       "liquidation": [
         {"aerodrome": [aero, usdc]},
-        {"aerodrome": [aero, usdc, usdbc, star]}
+        {"aerodrome": [aero, usdc, star]}
       ],
       "ULOwner": addresses.ULOwner
     });
