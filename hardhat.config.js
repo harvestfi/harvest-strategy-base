@@ -2,6 +2,7 @@ require("@nomiclabs/hardhat-etherscan");
 require("@nomiclabs/hardhat-truffle5");
 require("@nomiclabs/hardhat-web3");
 require("@nomiclabs/hardhat-ethers");
+require('hardhat-contract-sizer');
 
 const secret = require('./dev-keys.json');
 
@@ -21,7 +22,7 @@ module.exports = {
       chainId: 8453,
       forking: {
         url: `https://base-mainnet.g.alchemy.com/v2/${secret.alchemyKey}`,
-        blockNumber: 3360500, // <-- edit here
+        blockNumber: 13499800, // <-- edit here
       },
     },
     mainnet: {
@@ -61,5 +62,11 @@ module.exports = {
         }
       }
     ]
+  },
+  contractSizer: {
+    alphaSort: false,
+    disambiguatePaths: false,
+    runOnCompile: false,
+    strict: false,
   },
 };

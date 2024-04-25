@@ -13,8 +13,6 @@ import "../../base/interface/moonwell/ComptrollerInterface.sol";
 import "../../base/interface/balancer/IBVault.sol";
 import "../../base/interface/weth/IWETH.sol";
 
-import "hardhat/console.sol";
-
 contract MoonwellFoldStrategyV2 is BaseUpgradeableStrategy {
 
   using SafeMath for uint256;
@@ -206,6 +204,10 @@ contract MoonwellFoldStrategyV2 is BaseUpgradeableStrategy {
     ComptrollerInterface(rewardPool()).claimReward();
   }
 
+  function addRewardToken(address _token) public onlyGovernance {
+    rewardTokens.push(_token);
+  }
+
   function _liquidateRewards() internal {
     if (!sell()) {
       // Profits can be disabled for possible simplified and rapid exit
@@ -272,8 +274,6 @@ contract MoonwellFoldStrategyV2 is BaseUpgradeableStrategy {
     } else if (supplyCap.sub(currentSupplied) <= balance) {
       balance = supplyCap.sub(currentSupplied).sub(2);
     }
-    console.log(supplyCap, currentSupplied);
-    console.log(balance);
     IERC20(_underlying).safeApprove(_mToken, 0);
     IERC20(_underlying).safeApprove(_mToken, balance);
     MErc20Interface(_mToken).mint(balance);
