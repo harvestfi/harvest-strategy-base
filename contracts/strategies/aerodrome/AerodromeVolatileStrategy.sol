@@ -42,8 +42,10 @@ contract AerodromeVolatileStrategy is BaseUpgradeableStrategy {
       harvestMSIG
     );
 
-    address _lpt = IGauge(rewardPool()).stakingToken();
-    require(_lpt == _underlying, "Underlying mismatch");
+    if (_gauge != address(0)) {
+      address _lpt = IGauge(rewardPool()).stakingToken();
+      require(_lpt == _underlying, "Underlying mismatch");
+    }
   }
 
   function depositArbCheck() public pure returns(bool) {
@@ -51,7 +53,11 @@ contract AerodromeVolatileStrategy is BaseUpgradeableStrategy {
   }
 
   function _rewardPoolBalance() internal view returns (uint256 balance) {
-    balance = IGauge(rewardPool()).balanceOf(address(this));
+    if (rewardPool() != address(0)) {
+      balance = IGauge(rewardPool()).balanceOf(address(this));
+    } else {
+      balance = 0;
+    }
   }
 
   function _emergencyExitRewardPool() internal {
@@ -70,6 +76,9 @@ contract AerodromeVolatileStrategy is BaseUpgradeableStrategy {
   function _enterRewardPool() internal {
     address underlying_ = underlying();
     address rewardPool_ = rewardPool();
+    if (rewardPool_ == address(0)) {
+      return;
+    }
     uint256 entireBalance = IERC20(underlying_).balanceOf(address(this));
     IERC20(underlying_).safeApprove(rewardPool_, 0);
     IERC20(underlying_).safeApprove(rewardPool_, entireBalance);
@@ -111,7 +120,9 @@ contract AerodromeVolatileStrategy is BaseUpgradeableStrategy {
 
   function _claimRewards() internal {
     IPool(underlying()).claimFees();
-    IGauge(rewardPool()).getReward(address(this));
+    if (rewardPool() != address(0)) {
+      IGauge(rewardPool()).getReward(address(this));
+    }
   }
 
   function _liquidateReward() internal {
@@ -257,6 +268,18 @@ contract AerodromeVolatileStrategy is BaseUpgradeableStrategy {
   function doHardWork() external onlyNotPausedInvesting restricted {
     _claimRewards();
     _liquidateReward();
+    _investAllUnderlying();
+  }
+
+  function setGauge(address _newGauge) external onlyGovernance {
+    _withdrawUnderlyingFromPool(_rewardPoolBalance());
+    _claimRewards();
+    _liquidateReward();
+
+    address _lpt = IGauge(_newGauge).stakingToken();
+    require(_lpt == underlying(), "Underlying mismatch");
+
+    _setRewardPool(_newGauge);
     _investAllUnderlying();
   }
 
