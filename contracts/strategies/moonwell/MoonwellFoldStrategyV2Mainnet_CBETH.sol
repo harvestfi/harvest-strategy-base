@@ -17,6 +17,7 @@ contract MoonwellFoldStrategyV2Mainnet_CBETH is MoonwellFoldStrategyV2 {
     address comptroller = address(0xfBb21d0380beE3312B33c4353c8936a0F13EF26C);
     address well = address(0xFF8adeC2221f9f4D8dfbAFa6B9a297d17603493D);
     address usdc = address(0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913);
+    address well_new = address(0xA88594D404727625A9437C3f886C7643872296AE);
     MoonwellFoldStrategyV2.initializeBaseStrategy(
       _storage,
       underlying,
@@ -24,11 +25,11 @@ contract MoonwellFoldStrategyV2Mainnet_CBETH is MoonwellFoldStrategyV2 {
       mToken,
       comptroller,
       usdc,
-      740,
       760,
+      780,
       1000,
       true
     );
-    rewardTokens = [well, usdc];
+    rewardTokens = [well, usdc, well_new];
   }
 }

@@ -53,6 +53,7 @@ abstract contract ComptrollerInterface {
     function claimReward() virtual external;
 
     function borrowCaps(address) virtual external view returns(uint);
+    function supplyCaps(address) virtual external view returns(uint);
 }
 
 // The hooks that were patched out of the comptroller to make room for the supply caps, if we need them
