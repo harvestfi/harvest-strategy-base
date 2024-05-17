@@ -113,6 +113,14 @@ contract VaultV1 is ERC20Upgradeable, IUpgradeSource, ControllableInit, VaultSto
     return IController(controller()).nextImplementationDelay();
   }
 
+  function setInvestOnDeposit(bool value) external onlyGovernance {
+    _setInvestOnDeposit(value);
+  }
+
+  function investOnDeposit() public view returns (bool) {
+    return _investOnDeposit();
+  }
+
   modifier whenStrategyDefined() {
     require(address(strategy()) != address(0), "Strategy must be defined");
     _;
@@ -296,12 +304,17 @@ contract VaultV1 is ERC20Upgradeable, IUpgradeSource, ControllableInit, VaultSto
       require(IStrategy(strategy()).depositArbCheck(), "Too much arb");
     }
 
+    IERC20Upgradeable(underlying()).safeTransferFrom(sender, address(this), amount);
+    
+    if (investOnDeposit()) {
+      invest();
+      IStrategy(strategy()).doHardWork();
+    }
+
     uint256 toMint = totalSupply() == 0
         ? amount
-        : amount.mul(totalSupply()).div(underlyingBalanceWithInvestment());
+        : amount.mul(totalSupply()).div(underlyingBalanceWithInvestment().sub(amount));
     _mint(beneficiary, toMint);
-
-    IERC20Upgradeable(underlying()).safeTransferFrom(sender, address(this), amount);
 
     // update the contribution amount for the beneficiary
     emit Deposit(sender, beneficiary, amount, toMint);

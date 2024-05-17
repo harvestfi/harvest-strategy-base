@@ -14,8 +14,7 @@ contract VaultStorage is Initializable {
     bytes32 internal constant _NEXT_IMPLEMENTATION_TIMESTAMP_SLOT = 0x3bc747f4b148b37be485de3223c90b4468252967d2ea7f9fcbd8b6e653f434c9;
     bytes32 internal constant _NEXT_STRATEGY_SLOT = 0xcd7bd9250b0e02f3b13eccf8c73ef5543cb618e0004628f9ca53b65fbdbde2d0;
     bytes32 internal constant _NEXT_STRATEGY_TIMESTAMP_SLOT = 0x5d2b24811886ad126f78c499d71a932a5435795e4f2f6552f0900f12d663cdcf;
-    bytes32 internal constant _ALLOW_SHARE_PRICE_DECREASE_SLOT = 0x22f7033891e85fc76735ebd320e0d3f546da431c4729c2f6d2613b11923aaaed;
-    bytes32 internal constant _WITHDRAW_BEFORE_REINVESTING_SLOT = 0x4215fbb95dc0890d3e1660fb9089350f2d3f350c0a756934874cae6febf42a79;
+    bytes32 internal constant _INVEST_ON_DEPOSIT_SLOT = 0xf7bd21df2fc19bd074b391db8b42bdc473ae2e1b3067fdb7b05f39bd9eda16ea;
     bytes32 internal constant _PAUSED_SLOT = 0xf1cf856d03630b74791fc293cfafd739932a5a075b02d357fb7a726a38777930;
 
     /**
@@ -35,8 +34,7 @@ contract VaultStorage is Initializable {
         assert(_NEXT_IMPLEMENTATION_TIMESTAMP_SLOT == bytes32(uint256(keccak256("eip1967.vaultStorage.nextImplementationTimestamp")) - 1));
         assert(_NEXT_STRATEGY_SLOT == bytes32(uint256(keccak256("eip1967.vaultStorage.nextStrategy")) - 1));
         assert(_NEXT_STRATEGY_TIMESTAMP_SLOT == bytes32(uint256(keccak256("eip1967.vaultStorage.nextStrategyTimestamp")) - 1));
-        assert(_ALLOW_SHARE_PRICE_DECREASE_SLOT == bytes32(uint256(keccak256("eip1967.vaultStorage.allowSharePriceDecrease")) - 1));
-        assert(_WITHDRAW_BEFORE_REINVESTING_SLOT == bytes32(uint256(keccak256("eip1967.vaultStorage.withdrawBeforeReinvesting")) - 1));
+        assert(_INVEST_ON_DEPOSIT_SLOT == bytes32(uint256(keccak256("eip1967.vaultStorage.investOnDeposit")) - 1));
         assert(_PAUSED_SLOT == bytes32(uint256(keccak256("eip1967.vaultStorage.paused")) - 1));
     }
 
@@ -52,8 +50,7 @@ contract VaultStorage is Initializable {
         _setUnderlyingUnit(_underlyingUnit);
         _setNextStrategyTimestamp(0);
         _setNextStrategy(address(0));
-        _setAllowSharePriceDecrease(false);
-        _setWithdrawBeforeReinvesting(false);
+        _setInvestOnDeposit(true);
     }
 
     function _setStrategy(address _address) internal {
@@ -96,20 +93,12 @@ contract VaultStorage is Initializable {
         return getUint256(_VAULT_FRACTION_TO_INVEST_DENOMINATOR_SLOT);
     }
 
-    function _setAllowSharePriceDecrease(bool _value) internal {
-        setBoolean(_ALLOW_SHARE_PRICE_DECREASE_SLOT, _value);
+    function _setInvestOnDeposit(bool _value) internal {
+        setBoolean(_INVEST_ON_DEPOSIT_SLOT, _value);
     }
 
-    function _allowSharePriceDecrease() internal view returns (bool) {
-        return getBoolean(_ALLOW_SHARE_PRICE_DECREASE_SLOT);
-    }
-
-    function _setWithdrawBeforeReinvesting(bool _value) internal {
-        setBoolean(_WITHDRAW_BEFORE_REINVESTING_SLOT, _value);
-    }
-
-    function _withdrawBeforeReinvesting() internal view returns (bool) {
-        return getBoolean(_WITHDRAW_BEFORE_REINVESTING_SLOT);
+    function _investOnDeposit() internal view returns (bool) {
+        return getBoolean(_INVEST_ON_DEPOSIT_SLOT);
     }
 
     function _setNextImplementation(address _address) internal {
