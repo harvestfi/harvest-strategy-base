@@ -1,6 +1,6 @@
 module.exports = {
   "Storage": "0x98E03c6Ed7374F1e58FF022f1D2D8239526E13F9",
-  "RewardForwarder": "0x88937abfc8C6A88cc70bfc686E4fBba80DE8d329",
+  "RewardForwarder": "0x4c60e50173A6Bb05Fa4A8BF32fD4EA7e0975D2D8",
   "UniversalLiquidator": "0x589Ff9f1E9f517b232808280c46a64a36Ac557d5",
   "UniversalLiquidatorRegistry": "0x07d212988ECDf8d2c2Ab448114685CE5fDf07a4C",
   "Controller": "0xF90FF0F7c8Db52bF1bF869F74226eAD125EFa745",
