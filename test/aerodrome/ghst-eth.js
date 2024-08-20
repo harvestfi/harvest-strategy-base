@@ -11,22 +11,22 @@ const BigNumber = require("bignumber.js");
 const IERC20 = artifacts.require("IERC20");
 
 //const Strategy = artifacts.require("");
-const Strategy = artifacts.require("AerodromeStableStrategyMainnet_DOLA_USDC");
+const Strategy = artifacts.require("AerodromeVolatileStrategyMainnet_GHST_ETH");
 
 // Developed and tested at blockNumber 18684400
 
 // Vanilla Mocha test. Increased compatibility with tools that integrate Mocha.
-describe("Arbitrum Mainnet Aerodrome DOLA-USDC", function() {
+describe("Arbitrum Mainnet Aerodrome GHST-ETH", function() {
   let accounts;
 
   // external contracts
   let underlying;
 
   // external setup
-  let underlyingWhale = "0xf8505103646b8685554f28192B9c620fc30C2506";
+  let underlyingWhale = "0x9e764A1659CD313Ecc34649A921c39d1480f5AbA";
   let aero = "0x940181a94A35A4569E4529A3CDfB74e38FD98631";
-  let usdc = "0xd9aAEc86B65D86f6A7B5B1b0c42FFA531710b6CA";
-  let dola = "0x4621b7A9c75199271F773Ebd9A499dbd165c3191";
+  let weth = "0x4200000000000000000000000000000000000006";
+  let ghst = "0xcD2F22236DD9Dfe2356D7C543161D4d260FD9BcB";
 
   // parties in the protocol
   let governance;
@@ -41,7 +41,7 @@ describe("Arbitrum Mainnet Aerodrome DOLA-USDC", function() {
   let strategy;
 
   async function setupExternalContracts() {
-    underlying = await IERC20.at("0xf213F2D02837012dC0236cC105061e121bB03e37");
+    underlying = await IERC20.at("0x0DFb9Cb66A18468850d6216fCc691aa20ad1e091");
     console.log("Fetching Underlying at: ", underlying.address);
   }
 
@@ -72,9 +72,9 @@ describe("Arbitrum Mainnet Aerodrome DOLA-USDC", function() {
       "strategyArtifactIsUpgradable": true,
       "underlying": underlying,
       "governance": governance,
-      // "liquidation": [
-      //   {"aerodrome": [aero, usdc, dola]},
-      // ]
+      "liquidation": [
+        {"aerodrome": [aero, weth, ghst]},
+      ],
     });
 
     // whale send underlying to farmers

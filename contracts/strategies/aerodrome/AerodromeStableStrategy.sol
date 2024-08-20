@@ -152,7 +152,7 @@ contract AerodromeStableStrategy is BaseUpgradeableStrategy {
     _notifyProfitInRewardToken(_rewardToken, rewardBalance);
     uint256 remainingRewardBalance = IERC20(_rewardToken).balanceOf(address(this));
 
-    if (remainingRewardBalance == 0) {
+    if (remainingRewardBalance < 1e13) {
       return;
     }
 
@@ -163,9 +163,7 @@ contract AerodromeStableStrategy is BaseUpgradeableStrategy {
     uint256 decimals0 = ERC20(token0).decimals();
     uint256 decimals1 = ERC20(token1).decimals();
 
-    uint256 toToken0;
-    uint256 toToken1;
-
+    uint256 ratio;
     {
       uint256 out0 = 10**decimals0;
       uint256 out1 = IPool(_underlying).getAmountOut(out0, token0).add(IERC20(token1).balanceOf(address(this)));
@@ -174,10 +172,11 @@ contract AerodromeStableStrategy is BaseUpgradeableStrategy {
       out1 = out1.mul(1e18).div(10**decimals1);
       amountA = amountA.mul(1e18).div(10**decimals0);
       amountB = amountB.mul(1e18).div(10**decimals1);
-      uint256 ratio = out0 * 1e18 / out1 * amountB / amountA;
-      toToken0 = remainingRewardBalance * 1e18 / (ratio + 1e18);
-      toToken1 = remainingRewardBalance - toToken0;
+      ratio = out0.mul(1e18).div(out1).mul(amountB).div(amountA);
     }
+
+    uint256 toToken0 = remainingRewardBalance.mul(1e18).div(ratio.add(1e18));
+    uint256 toToken1 = remainingRewardBalance.sub(toToken0);
 
     IERC20(_rewardToken).safeApprove(_universalLiquidator, 0);
     IERC20(_rewardToken).safeApprove(_universalLiquidator, remainingRewardBalance);

@@ -11,22 +11,23 @@ const BigNumber = require("bignumber.js");
 const IERC20 = artifacts.require("IERC20");
 
 //const Strategy = artifacts.require("");
-const Strategy = artifacts.require("AerodromeStableStrategyMainnet_DOLA_USDC");
+const Strategy = artifacts.require("AerodromeVolatileStrategyMainnet_EURA_USDA");
 
 // Developed and tested at blockNumber 18684400
 
 // Vanilla Mocha test. Increased compatibility with tools that integrate Mocha.
-describe("Arbitrum Mainnet Aerodrome DOLA-USDC", function() {
+describe("Arbitrum Mainnet Aerodrome EURA-USDA", function() {
   let accounts;
 
   // external contracts
   let underlying;
 
   // external setup
-  let underlyingWhale = "0xf8505103646b8685554f28192B9c620fc30C2506";
+  let underlyingWhale = "0xF3857c6fE0D743B85a16b2A8840e96F9B174e0F3";
   let aero = "0x940181a94A35A4569E4529A3CDfB74e38FD98631";
-  let usdc = "0xd9aAEc86B65D86f6A7B5B1b0c42FFA531710b6CA";
-  let dola = "0x4621b7A9c75199271F773Ebd9A499dbd165c3191";
+  let usdc = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
+  let eura = "0xA61BeB4A3d02decb01039e378237032B351125B4";
+  let usda = "0x0000206329b97DB379d5E1Bf586BbDB969C63274";
 
   // parties in the protocol
   let governance;
@@ -41,7 +42,7 @@ describe("Arbitrum Mainnet Aerodrome DOLA-USDC", function() {
   let strategy;
 
   async function setupExternalContracts() {
-    underlying = await IERC20.at("0xf213F2D02837012dC0236cC105061e121bB03e37");
+    underlying = await IERC20.at("0x79eF3eCDa775860a2351ae2A7B80C4d80ba47F72");
     console.log("Fetching Underlying at: ", underlying.address);
   }
 
@@ -72,9 +73,13 @@ describe("Arbitrum Mainnet Aerodrome DOLA-USDC", function() {
       "strategyArtifactIsUpgradable": true,
       "underlying": underlying,
       "governance": governance,
-      // "liquidation": [
-      //   {"aerodrome": [aero, usdc, dola]},
-      // ]
+      "liquidation": [
+        {"aerodrome": [aero, usdc, usda]},
+        {"aerodrome": [aero, usdc, usda, eura]},
+      ],
+      "aeroSetup": [
+        [usdc, usda, true, "0x0000000000000000000000000000000000000000"]
+      ],
     });
 
     // whale send underlying to farmers

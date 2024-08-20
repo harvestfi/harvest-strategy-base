@@ -3,7 +3,7 @@ pragma solidity 0.6.12;
 
 import "./AerodromeStableStrategy.sol";
 
-contract AerodromeStableStrategyMainnet_DOLA_USDC is AerodromeStableStrategy {
+contract AerodromeStableStrategyMainnet_msETH_ETH is AerodromeStableStrategy {
 
   constructor() public {}
 
@@ -11,8 +11,8 @@ contract AerodromeStableStrategyMainnet_DOLA_USDC is AerodromeStableStrategy {
     address _storage,
     address _vault
   ) public initializer {
-    address underlying = address(0xf213F2D02837012dC0236cC105061e121bB03e37);
-    address gauge = address(0xCCff5627cd544b4cBb7d048139C1A6b6Bde67885);
+    address underlying = address(0xDE4FB30cCC2f1210FcE2c8aD66410C586C8D1f9A);
+    address gauge = address(0x62940D9643a130b80CA0f8bc7e94De5b7ec496C5);
     address aero = address(0x940181a94A35A4569E4529A3CDfB74e38FD98631);
     AerodromeStableStrategy.initializeBaseStrategy(
       _storage,

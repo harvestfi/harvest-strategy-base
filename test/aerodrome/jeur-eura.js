@@ -14,7 +14,7 @@ const IERC20 = artifacts.require("IERC20");
 //const Strategy = artifacts.require("");
 const Strategy = artifacts.require("AerodromeStableStrategyMainnet_jEUR_EURA");
 
-// Developed and tested at blockNumber 17017500
+// Developed and tested at blockNumber 18619752
 
 // Vanilla Mocha test. Increased compatibility with tools that integrate Mocha.
 describe("Arbitrum Mainnet Aerodrome jEUR-EURA", function() {
@@ -24,12 +24,12 @@ describe("Arbitrum Mainnet Aerodrome jEUR-EURA", function() {
   let underlying;
 
   // external setup
-  let underlyingWhale = "0xc31249BA48763dF46388BA5C4E7565d62ed4801C";
+  let underlyingWhale = "0x90E783A59a656fa98b7c2d466e0da8f169ef8746";
   let aero = "0x940181a94A35A4569E4529A3CDfB74e38FD98631";
   let jeur = "0x4154550f4Db74Dc38d1FE98e1F3F28ed6daD627d";
   let ageur = "0xA61BeB4A3d02decb01039e378237032B351125B4";
   let usdc = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
-  let usda = "0xb56d0839998Fd79EFCD15c27cF966250AA58D6D3";
+  let usda = "0x0000206329b97DB379d5E1Bf586BbDB969C63274";
 
   // parties in the protocol
   let governance;
@@ -78,9 +78,11 @@ describe("Arbitrum Mainnet Aerodrome jEUR-EURA", function() {
       "governance": governance,
       "liquidation": [
         {"aerodrome": [aero, usdc, usda, ageur]},
-        {"aerodrome": [usdc, usda]},
-        {"aerodrome": [usda, ageur]},
-        {"aerodrome": [ageur, jeur]},
+        {"aerodrome": [aero, usdc, usda, ageur, jeur]},
+      ],
+      "aeroSetup": [
+        [usdc, usda, true, "0x0000000000000000000000000000000000000000"],
+        [ageur, jeur, true, "0x0000000000000000000000000000000000000000"],
       ],
       "ULOwner": addresses.ULOwner
     });

@@ -151,7 +151,7 @@ contract AerodromeVolatileStrategy is BaseUpgradeableStrategy {
     _notifyProfitInRewardToken(_rewardToken, rewardBalance);
     uint256 remainingRewardBalance = IERC20(_rewardToken).balanceOf(address(this));
 
-    if (remainingRewardBalance == 0) {
+    if (remainingRewardBalance < 1e13) {
       return;
     }
 
