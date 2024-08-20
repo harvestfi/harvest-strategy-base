@@ -22,7 +22,7 @@ module.exports = {
       chainId: 8453,
       forking: {
         url: `https://base-mainnet.g.alchemy.com/v2/${secret.alchemyKey}`,
-        blockNumber: 13499800, // <-- edit here
+        blockNumber: 18684400, // <-- edit here
       },
     },
     mainnet: {
@@ -39,7 +39,7 @@ module.exports = {
         settings: {
           optimizer: {
             enabled: true,
-            runs: 200,
+            runs: 1,
           },
         },
       },

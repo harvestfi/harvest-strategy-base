@@ -4,6 +4,7 @@ const IController = artifacts.require("IController");
 const Vault = artifacts.require("VaultV2");
 const IUpgradeableStrategy = artifacts.require("IUpgradeableStrategy");
 const ILiquidatorRegistry = artifacts.require("IUniversalLiquidatorRegistry");
+const IDex = artifacts.require("IDex");
 
 const Utils = require("./Utils.js");
 
@@ -96,6 +97,19 @@ async function setupCoreProtocol(config) {
         config.liquidation[i][dex],
         {from: config.ULOwner}
       );
+    }
+  }
+
+  if(config.uniV3Fee) {
+    const uniV3Dex = await IDex.at("0x3c304E03e8ba4dAA23671Fffab45288505BF3992");
+    for (i=0;i<config.uniV3Fee.length;i++) {
+      await uniV3Dex.setFee(config.uniV3Fee[i][0], config.uniV3Fee[i][1], config.uniV3Fee[i][2], {from: config.ULOwner})
+    }
+  }
+  if(config.aeroSetup) {
+    const dex = await IDex.at("0x63dFe27676d53f24E251CbBc0E37ffDC856319a2");
+    for (i=0;i<config.aeroSetup.length;i++) {
+      await dex.pairSetup(config.aeroSetup[i][0], config.aeroSetup[i][1], config.aeroSetup[i][2], config.aeroSetup[i][3], {from: config.ULOwner})
     }
   }
 
