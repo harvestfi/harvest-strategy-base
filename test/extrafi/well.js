@@ -12,21 +12,22 @@ const BigNumber = require("bignumber.js");
 const IERC20 = artifacts.require("IERC20");
 
 //const Strategy = artifacts.require("");
-const Strategy = artifacts.require("MoonwellSupplyStrategyMainnet_weETH");
+const Strategy = artifacts.require("ExtraFiLendStrategyMainnet_WELL");
 
-// Developed and tested at blockNumber 18463800
+// Developed and tested at blockNumber 19374750
 
 // Vanilla Mocha test. Increased compatibility with tools that integrate Mocha.
-describe("Arbitrum Mainnet Moonwell Supply weETH", function() {
+describe("Arbitrum Mainnet ExtraFi Lend WELL", function() {
   let accounts;
 
   // external contracts
   let underlying;
 
   // external setup
-  let underlyingWhale = "0xcFDAd85BdDdC12c71BB4317C204a69b5851E56c9";
+  let underlyingWhale = "0xF786f85C46a19F4CDC467D7B68B946226F7e77Ae";
   let weth = "0x4200000000000000000000000000000000000006";
-  let weeth = "0x04C0599Ae5A44757c0af6F9eC3b93da8976c150A";
+  let usdc = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
+  let extra = "0x2dAD3a13ef0C6366220f989157009e501e7938F8";
 
   // parties in the protocol
   let governance;
@@ -41,7 +42,7 @@ describe("Arbitrum Mainnet Moonwell Supply weETH", function() {
   let strategy;
 
   async function setupExternalContracts() {
-    underlying = await IERC20.at("0x04C0599Ae5A44757c0af6F9eC3b93da8976c150A");
+    underlying = await IERC20.at("0xA88594D404727625A9437C3f886C7643872296AE");
     console.log("Fetching Underlying at: ", underlying.address);
   }
 
@@ -73,13 +74,7 @@ describe("Arbitrum Mainnet Moonwell Supply weETH", function() {
       "underlying": underlying,
       "governance": governance,
       "liquidation": [
-        {"uniV3": [weeth, weth]},
-        {"uniV3": [weth, weeth]},
-        {"uniV3": [weeth, weth, addresses.FARM]},
-        {"uniV3": [weeth, weth, addresses.FARM, addresses.iFARM]},
-      ],
-      "uniV3Fee": [
-        [weeth, weth, 100],
+        {"aerodrome": [extra, weth]},
       ],
     });
 

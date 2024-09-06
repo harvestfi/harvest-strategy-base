@@ -12,19 +12,19 @@ const BigNumber = require("bignumber.js");
 const IERC20 = artifacts.require("IERC20");
 
 //const Strategy = artifacts.require("");
-const Strategy = artifacts.require("MoonwellSupplyStrategyMainnet_weETH");
+const Strategy = artifacts.require("MoonwellFoldStrategyV2Mainnet_weETH");
 
-// Developed and tested at blockNumber 18463800
+// Developed and tested at blockNumber 19323800
 
 // Vanilla Mocha test. Increased compatibility with tools that integrate Mocha.
-describe("Arbitrum Mainnet Moonwell Supply weETH", function() {
+describe("Arbitrum Mainnet Moonwell Fold weETH", function() {
   let accounts;
 
   // external contracts
   let underlying;
 
   // external setup
-  let underlyingWhale = "0xcFDAd85BdDdC12c71BB4317C204a69b5851E56c9";
+  let underlyingWhale = "0x5f05A92FaFe95a92E302Bd0Dd1479dB425b4dC17";
   let weth = "0x4200000000000000000000000000000000000006";
   let weeth = "0x04C0599Ae5A44757c0af6F9eC3b93da8976c150A";
 
@@ -67,19 +67,14 @@ describe("Arbitrum Mainnet Moonwell Supply weETH", function() {
 
     await setupExternalContracts();
     [controller, vault, strategy] = await setupCoreProtocol({
-      "existingVaultAddress": null,
+      "existingVaultAddress": "0x5c5Aa1eC33BB0391D056095b0D6691BAf5A40d7e",
       "strategyArtifact": Strategy,
       "strategyArtifactIsUpgradable": true,
+      "announceStrategy": true,
       "underlying": underlying,
       "governance": governance,
       "liquidation": [
-        {"uniV3": [weeth, weth]},
         {"uniV3": [weth, weeth]},
-        {"uniV3": [weeth, weth, addresses.FARM]},
-        {"uniV3": [weeth, weth, addresses.FARM, addresses.iFARM]},
-      ],
-      "uniV3Fee": [
-        [weeth, weth, 100],
       ],
     });
 
