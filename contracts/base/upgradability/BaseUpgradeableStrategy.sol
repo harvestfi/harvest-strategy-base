@@ -90,7 +90,7 @@ contract BaseUpgradeableStrategy is Initializable, ControllableInit, BaseUpgrade
       address _rewardToken,
       uint256 _rewardBalance
   ) internal {
-      if (_rewardBalance > 0) {
+      if (_rewardBalance > 10) {
           uint _feeDenominator = feeDenominator();
           uint256 strategistFee = _rewardBalance.mul(strategistFeeNumerator()).div(_feeDenominator);
           uint256 platformFee = _rewardBalance.mul(platformFeeNumerator()).div(_feeDenominator);

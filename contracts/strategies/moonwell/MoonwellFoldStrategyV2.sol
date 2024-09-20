@@ -75,7 +75,7 @@ contract MoonwellFoldStrategyV2 is BaseUpgradeableStrategy {
     require(_collateralFactorNumerator < _factorDenominator, "Numerator should be smaller than denominator");
     require(_borrowTargetFactorNumerator < _collateralFactorNumerator, "Target should be lower than limit");
     _setFactorDenominator(_factorDenominator);
-    _setCollateralFactorNumerator(_collateralFactorNumerator);
+    setUint256(_COLLATERALFACTORNUMERATOR_SLOT, _collateralFactorNumerator);
     setUint256(_BORROWTARGETFACTORNUMERATOR_SLOT, _borrowTargetFactorNumerator);
     setBoolean(_FOLD_SLOT, _fold);
     address[] memory markets = new address[](1);
@@ -229,10 +229,15 @@ contract MoonwellFoldStrategyV2 is BaseUpgradeableStrategy {
       }
     }
     uint256 rewardBalance = IERC20(_rewardToken).balanceOf(address(this));
+
+    if (rewardBalance < 1e8) {
+      return;
+    }
+
     _notifyProfitInRewardToken(_rewardToken, rewardBalance);
     uint256 remainingRewardBalance = IERC20(_rewardToken).balanceOf(address(this));
 
-    if (remainingRewardBalance == 0) {
+    if (remainingRewardBalance < 1e10) {
       return;
     }
   

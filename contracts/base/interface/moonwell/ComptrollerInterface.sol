@@ -54,6 +54,9 @@ abstract contract ComptrollerInterface {
 
     function borrowCaps(address) virtual external view returns(uint);
     function supplyCaps(address) virtual external view returns(uint);
+
+    function _setMarketBorrowCaps(address[] calldata, uint256[] calldata) virtual external;
+    function _setMarketSupplyCaps(address[] calldata, uint256[] calldata) virtual external;
 }
 
 // The hooks that were patched out of the comptroller to make room for the supply caps, if we need them
