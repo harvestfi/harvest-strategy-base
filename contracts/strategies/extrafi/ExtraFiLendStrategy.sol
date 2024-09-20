@@ -92,7 +92,7 @@ contract ExtraFiLendStrategy is BaseUpgradeableStrategy {
       _redeem(fee);
       address _underlying = underlying();
       if (IERC20(_underlying).balanceOf(address(this)) < fee) {
-        return;
+        balanceIncrease = IERC20(_underlying).balanceOf(address(this)).mul(feeDenominator()).div(totalFeeNumerator());
       }
       _notifyProfitInRewardToken(_underlying, balanceIncrease);
       uint256 balance = IERC20(_underlying).balanceOf(address(this));
@@ -159,8 +159,9 @@ contract ExtraFiLendStrategy is BaseUpgradeableStrategy {
     uint256 toRedeem = amountUnderlying.sub(balance);
     // get some of the underlying
     _redeem(toRedeem);
+    balance = IERC20(_underlying).balanceOf(address(this));
     // transfer the amount requested (or the amount we have) back to vault()
-    IERC20(_underlying).safeTransfer(vault(), amountUnderlying);
+    IERC20(_underlying).safeTransfer(vault(), Math.min(amountUnderlying, balance));
     balance = IERC20(_underlying).balanceOf(address(this));
     if (balance > 0) {
       _investAllUnderlying();
