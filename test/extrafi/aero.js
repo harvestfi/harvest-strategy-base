@@ -16,7 +16,7 @@ const Strategy = artifacts.require("ExtraFiLendStrategyMainnet_AERO");
 // Developed and tested at blockNumber 21793300
 
 // Vanilla Mocha test. Increased compatibility with tools that integrate Mocha.
-describe("Arbitrum Mainnet ExtraFi Lend AERO", function() {
+describe("Base Mainnet ExtraFi Lend AERO", function() {
   let accounts;
 
   // external contracts

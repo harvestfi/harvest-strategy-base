@@ -16,7 +16,7 @@ const Strategy = artifacts.require("AerodromeVolatileStrategyMainnet_AERO_USDC")
 // Developed and tested at blockNumber 21793300
 
 // Vanilla Mocha test. Increased compatibility with tools that integrate Mocha.
-describe("Arbitrum Mainnet Aerodrome AERO-USDC", function() {
+describe("Base Mainnet Aerodrome AERO-USDC", function() {
   let accounts;
 
   // external contracts

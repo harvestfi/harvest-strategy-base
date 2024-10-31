@@ -7,94 +7,89 @@ This [Hardhat](https://hardhat.org/) environment is configured to use Mainnet fo
 1. Run `npm install` to install all the dependencies.
 2. Sign up on [Alchemy](https://dashboard.alchemyapi.io/signup/). We recommend using Alchemy over Infura to allow for a reproducible
 Mainnet fork testing environment as well as efficiency due to caching.
-3. Create a file `dev-keys.json`:
-  ```
-    {
-      "alchemyKey": "<your-alchemy-key>"
-    }
-  ```
+3. Create a file `.env`, using the template given in `.env.template`.
 
 ## Run
 
 All tests are located under the `test` folder.
 
-1. Run `npx hardhat test [test file location]`: `npx hardhat test ./test/balancer/wsteth-usdc.js` (if for some reason the NodeJS heap runs out of memory, make sure to explicitly increase its size via `export NODE_OPTIONS=--max_old_space_size=4096`). This will produce the following output:
+1. Run `npx hardhat test [test file location]`: `npx hardhat test ./test/aerodrome/aero-usdc.js` (if for some reason the NodeJS heap runs out of memory, make sure to explicitly increase its size via `export NODE_OPTIONS=--max_old_space_size=4096`). This will produce the following output:
   ```
-  Arbitrum Mainnet Balancer wstETH-USDC
+  Base Mainnet Aerodrome AERO-USDC
 Impersonating...
 0x6a74649aCFD7822ae8Fb78463a9f2192752E5Aa2
-0x0345Bc8EDdbba03E11e366cFb4E2b232b8f1b739
-Fetching Underlying at:  0x178E029173417b1F9C8bC16DCeC6f697bC323746
-New Vault Deployed:  0xa4B5Ad0ca0E05ea73E59046CBCb6b3641318c9d3
-Strategy Deployed:  0xf47FCd7914b24676C78222Af1431f4826B368F30
+0x1902EcfC34A4D2289759AFF23f6F104BC9B8eD53
+Fetching Underlying at:  0x2223F9FE624F69Da4D8256A7bCc9104FBA7F8f75
+New Vault Deployed:  0xA545A0d87e9De570bD61c647FA34a1dDC0eF663f
+Strategy Deployed:  0x7509532E32f0D19FC9F8288B3509548DA6737e45
     Happy path
 loop  0
 old shareprice:  1000000000000000000
-new shareprice:  1000000000000000000
-growth:  1
-instant APR: 0 %
-instant APY: 0 %
+new shareprice:  1000000012606906751
+growth:  1.0000000126069069
+instant APR: 0.005521825201082464 %
+instant APY: 0.005521977238953646 %
 loop  1
-old shareprice:  1000000000000000000
-new shareprice:  1000068403677420556
-growth:  1.0000684036774206
-instant APR: 26.04926042303911 %
-instant APY: 29.74485660521895 %
+old shareprice:  1000000012606906751
+new shareprice:  1000136838560105460
+growth:  1.0001368259514738
+instant APR: 59.92976674552253 %
+instant APY: 81.99448683145197 %
 loop  2
-old shareprice:  1000068403677420556
-new shareprice:  1000131319321304444
-growth:  1.0000629113405168
-instant APR: 23.95768699115301 %
-instant APY: 27.061149684423057 %
+old shareprice:  1000136838560105460
+new shareprice:  1000274298283974450
+growth:  1.0001374409166517
+instant APR: 60.1991214934392 %
+instant APY: 82.48455088227541 %
 loop  3
-old shareprice:  1000131319321304444
-new shareprice:  1000193897701257046
-growth:  1.0000625701632813
-instant APR: 23.827761013559037 %
-instant APY: 26.896279294823277 %
+old shareprice:  1000274298283974450
+new shareprice:  1000411779311201682
+growth:  1.0001374433267587
+instant APR: 60.20017712030645 %
+instant APY: 82.48647407643934 %
 loop  4
-old shareprice:  1000193897701257046
-new shareprice:  1000256321542735812
-growth:  1.000062411739986
-instant APR: 23.767430782293474 %
-instant APY: 26.819795416465155 %
+old shareprice:  1000411779311201682
+new shareprice:  1000549278776658240
+growth:  1.0001374428693264
+instant APR: 60.19997676495281 %
+instant APY: 82.48610905741667 %
 loop  5
-old shareprice:  1000256321542735812
-new shareprice:  1000318634555811359
-growth:  1.0000622970450008
-instant APR: 23.723753020397634 %
-instant APY: 26.76445146036619 %
+old shareprice:  1000549278776658240
+new shareprice:  1000686796795039251
+growth:  1.0001374425241196
+instant APR: 60.199825564395404 %
+instant APY: 82.48583359193947 %
 loop  6
-old shareprice:  1000318634555811359
-new shareprice:  1000380840931449184
-growth:  1.0000621865608508
-instant APR: 23.681678814655715 %
-instant APY: 26.711162141078937 %
+old shareprice:  1000686796795039251
+new shareprice:  1000824333251821889
+growth:  1.000137442062015
+instant APR: 60.199623162590754 %
+instant APY: 82.48546484586787 %
 loop  7
-old shareprice:  1000380840931449184
-new shareprice:  1000442949039498353
-growth:  1.0000620844637442
-instant APR: 23.642798534864234 %
-instant APY: 26.661937967659497 %
+old shareprice:  1000824333251821889
+new shareprice:  1000961888147092113
+growth:  1.000137441597591
+instant APR: 60.199419744854765 %
+instant APY: 82.48509424966875 %
 loop  8
-old shareprice:  1000442949039498353
-new shareprice:  1000479005035224559
-growth:  1.0000360400318287
-instant APR: 13.724644787553073 %
-instant APY: 14.708122498585574 %
+old shareprice:  1000961888147092113
+new shareprice:  1001099461480936011
+growth:  1.0001374411308492
+instant APR: 60.19921531196548 %
+instant APY: 82.48472180477077 %
 loop  9
-old shareprice:  1000479005035224559
-new shareprice:  1000479005035224559
-growth:  1
-instant APR: 0 %
-instant APY: 0 %
+old shareprice:  1001099461480936011
+new shareprice:  1001237053368049724
+growth:  1.0001374407762742
+instant APR: 60.199060008099714 %
+instant APY: 82.4844388658119 %
 earned!
-APR: 18.24131008308575 %
-APY: 20.005517445690145 %
-      ✔ Farmer should earn money (32947ms)
+APR: 60.21026979324024 %
+APY: 82.50486243650539 %
+      ✔ Farmer should earn money (10513ms)
 
 
-  1 passing (37s)
+  1 passing (15s)
   ```
 
 ## Develop

@@ -16,7 +16,7 @@ const Strategy = artifacts.require("CompoundStrategyMainnet_USDbC");
 // Developed and tested at blockNumber 21793300
 
 // Vanilla Mocha test. Increased compatibility with tools that integrate Mocha.
-describe("Arbitrum Mainnet Compound USDbC", function() {
+describe("Base Mainnet Compound USDbC", function() {
   let accounts;
 
   // external contracts
