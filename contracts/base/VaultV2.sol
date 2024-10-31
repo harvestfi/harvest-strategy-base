@@ -99,13 +99,13 @@ contract VaultV2 is IERC4626, VaultV1 {
 
     function convertToAssets(uint256 _shares) public view returns (uint256) {
         return totalAssets() == 0 || totalSupply() == 0
-            ? _shares * (TEN ** ERC20Upgradeable(underlying()).decimals()) / (TEN ** decimals())
-            : _shares * totalAssets() / totalSupply();
+            ? _shares.mul(TEN ** ERC20Upgradeable(underlying()).decimals()).div(TEN ** decimals())
+            : _shares.mul(totalAssets()).div(totalSupply());
     }
 
     function convertToShares(uint256 _assets) public view returns (uint256) {
         return totalAssets() == 0 || totalSupply() == 0
-            ? _assets * (TEN ** decimals()) / (TEN ** ERC20Upgradeable(underlying()).decimals())
-            : _assets * totalSupply() / totalAssets();
+            ? _assets.mul(TEN ** decimals()).div(TEN ** ERC20Upgradeable(underlying()).decimals())
+            : _assets.mul(totalSupply()).div(totalAssets());
     }
 }

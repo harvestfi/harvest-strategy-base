@@ -14,7 +14,6 @@ contract FluidLendStrategy is BaseUpgradeableStrategy {
   using SafeMath for uint256;
   using SafeERC20 for IERC20;
 
-  address public constant weth = address(0x4200000000000000000000000000000000000006);
   address public constant harvestMSIG = address(0x97b3e5712CDE7Db13e939a188C8CA90Db5B05131);
 
   // additional storage slots (on top of BaseUpgradeableStrategy ones) are defined here

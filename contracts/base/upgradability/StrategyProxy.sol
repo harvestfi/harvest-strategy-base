@@ -1,7 +1,7 @@
 //SPDX-License-Identifier: Unlicense
 pragma solidity 0.6.12;
 
-import "../inheritance/IUpgradeSource.sol";
+import "../interface/IUpgradeSource.sol";
 import "./BaseUpgradeabilityProxy.sol";
 
 contract StrategyProxy is BaseUpgradeabilityProxy {
