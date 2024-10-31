@@ -2,15 +2,6 @@
 pragma solidity 0.6.12;
 
 interface IUniversalLiquidator {
-    event Swap(
-        address indexed sellToken,
-        address indexed buyToken,
-        address indexed receiver,
-        address initiator,
-        uint256 sellAmount,
-        uint256 minBuyAmount
-    );
-
     function swap(
         address _sellToken,
         address _buyToken,

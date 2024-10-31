@@ -7,59 +7,63 @@ import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 import "./inheritance/Governable.sol";
-
 import "./interface/IController.sol";
 import "./interface/IStrategy.sol";
 import "./interface/IVault.sol";
 
 import "./RewardForwarder.sol";
 
-
+/**
+ * @title Controller
+ * @dev Manages protocol parameters, profit-sharing, and fee distribution for strategies and vaults.
+ * Provides governance-controlled configuration and allows whitelisted smart contracts to interact 
+ * with the protocol.
+ */
 contract Controller is Governable {
     using SafeERC20 for IERC20;
     using Address for address;
     using SafeMath for uint256;
 
-    // ========================= Fields =========================
+    // ========================= State Variables =========================
 
-    // external parties
+    /// @notice Token used for rewards and fees within the protocol.
     address public targetToken;
+
+    /// @notice Addresses for protocol-related fee and profit-sharing recipients.
     address public protocolFeeReceiver;
     address public profitSharingReceiver;
     address public rewardForwarder;
     address public universalLiquidator;
-    address public dolomiteYieldFarmingRouter;
 
+    /// @notice Delay time for scheduling parameter changes.
     uint256 public nextImplementationDelay;
 
-    /// 15% of fees captured go to iFARM stakers
+    /// @notice Profit-sharing and fee configuration parameters.
     uint256 public profitSharingNumerator = 700;
     uint256 public nextProfitSharingNumerator = 0;
     uint256 public nextProfitSharingNumeratorTimestamp = 0;
 
-    /// 5% of fees captured go to strategists
     uint256 public strategistFeeNumerator = 0;
     uint256 public nextStrategistFeeNumerator = 0;
     uint256 public nextStrategistFeeNumeratorTimestamp = 0;
 
-    /// 5% of fees captured go to the devs of the platform
     uint256 public platformFeeNumerator = 300;
     uint256 public nextPlatformFeeNumerator = 0;
     uint256 public nextPlatformFeeNumeratorTimestamp = 0;
 
-    /// used for queuing a new delay
     uint256 public tempNextImplementationDelay = 0;
     uint256 public tempNextImplementationDelayTimestamp = 0;
 
+    /// @dev Constants for fee calculations.
     uint256 public constant MAX_TOTAL_FEE = 3000;
     uint256 public constant FEE_DENOMINATOR = 10000;
 
-    /// @notice This mapping allows certain contracts to stake on a user's behalf
-    mapping (address => bool) public addressWhitelist;
-    mapping (bytes32 => bool) public codeWhitelist;
+    /// @notice Whitelisted addresses and code hashes for greylisting contracts.
+    mapping(address => bool) public addressWhitelist;
+    mapping(bytes32 => bool) public codeWhitelist;
 
-    // All eligible hardWorkers that we have
-    mapping (address => bool) public hardWorkers;
+    /// @notice List of addresses allowed to perform certain operations within the protocol.
+    mapping(address => bool) public hardWorkers;
 
     // ========================= Events =========================
 
@@ -91,12 +95,27 @@ contract Controller is Governable {
 
     // ========================= Modifiers =========================
 
+    /**
+     * @dev Restricts access to governance or addresses marked as hard workers.
+     */
     modifier onlyHardWorkerOrGovernance() {
-        require(hardWorkers[msg.sender] || (msg.sender == governance()),
-            "only hard worker can call this");
+        require(
+            hardWorkers[msg.sender] || (msg.sender == governance()),
+            "only hard worker can call this"
+        );
         _;
     }
 
+    /**
+     * @notice Constructor to initialize the controller with necessary addresses and parameters.
+     * @param _storage Address of the storage contract.
+     * @param _targetToken Address of the target token.
+     * @param _protocolFeeReceiver Address that receives protocol fees.
+     * @param _profitSharingReceiver Address that receives profit sharing.
+     * @param _rewardForwarder Address responsible for forwarding rewards.
+     * @param _universalLiquidator Address of the universal liquidator contract.
+     * @param _nextImplementationDelay Delay before a scheduled upgrade can occur.
+     */
     constructor(
         address _storage,
         address _targetToken,
@@ -105,9 +124,7 @@ contract Controller is Governable {
         address _rewardForwarder,
         address _universalLiquidator,
         uint _nextImplementationDelay
-    )
-    Governable(_storage)
-    public {
+    ) Governable(_storage) public {
         require(_targetToken != address(0), "_targetToken should not be empty");
         require(_protocolFeeReceiver != address(0), "_protocolFeeReceiver should not be empty");
         require(_profitSharingReceiver != address(0), "_profitSharingReceiver should not be empty");
@@ -122,92 +139,142 @@ contract Controller is Governable {
         nextImplementationDelay = _nextImplementationDelay;
     }
 
-        // [Grey list]
-    // An EOA can safely interact with the system no matter what.
-    // If you're using Metamask, you're using an EOA.
-    // Only smart contracts may be affected by this grey list.
-    //
-    // This contract will not be able to ban any EOA from the system
-    // even if an EOA is being added to the greyList, he/she will still be able
-    // to interact with the whole system as if nothing happened.
-    // Only smart contracts will be affected by being added to the greyList.
-    function greyList(address _addr) public view returns (bool) {
+    // ========================= Functions =========================
+
+    /**
+     * @notice Checks if an address is in the greylist.
+     * @param _addr Address to check.
+     * @return True if the address is in the greylist, false otherwise.
+     */
+    function greyList(address _addr) external view returns (bool) {
         return !addressWhitelist[_addr] && !codeWhitelist[getContractHash(_addr)];
     }
 
-    // Only smart contracts will be affected by the whitelist.
-    function addToWhitelist(address _target) public onlyGovernance {
+    /**
+     * @notice Adds an address to the whitelist.
+     * @param _target Address to be whitelisted.
+     */
+    function addToWhitelist(address _target) external onlyGovernance {
         addressWhitelist[_target] = true;
         emit AddedAddressToWhitelist(_target);
     }
 
-    function addMultipleToWhitelist(address[] memory _targets) public onlyGovernance {
+    /**
+     * @notice Adds multiple addresses to the whitelist.
+     * @param _targets Array of addresses to be whitelisted.
+     */
+    function addMultipleToWhitelist(address[] memory _targets) external onlyGovernance {
         for (uint256 i = 0; i < _targets.length; i++) {
-        addressWhitelist[_targets[i]] = true;
+            addressWhitelist[_targets[i]] = true;
         }
     }
 
-    function removeFromWhitelist(address _target) public onlyGovernance {
+    /**
+     * @notice Removes an address from the whitelist.
+     * @param _target Address to be removed from the whitelist.
+     */
+    function removeFromWhitelist(address _target) external onlyGovernance {
         addressWhitelist[_target] = false;
         emit RemovedAddressFromWhitelist(_target);
     }
 
-    function removeMultipleFromWhitelist(address[] memory _targets) public onlyGovernance {
+    /**
+     * @notice Removes multiple addresses from the whitelist.
+     * @param _targets Array of addresses to be removed from the whitelist.
+     */
+    function removeMultipleFromWhitelist(address[] memory _targets) external onlyGovernance {
         for (uint256 i = 0; i < _targets.length; i++) {
-        addressWhitelist[_targets[i]] = false;
+            addressWhitelist[_targets[i]] = false;
         }
     }
 
+    /**
+     * @notice Returns the code hash of a contract.
+     * @param a Address of the contract to hash.
+     * @return hash Code hash of the contract.
+     */
     function getContractHash(address a) public view returns (bytes32 hash) {
         assembly {
-        hash := extcodehash(a)
+            hash := extcodehash(a)
         }
     }
 
-    function addCodeToWhitelist(address _target) public onlyGovernance {
+    /**
+     * @notice Adds a contract's code hash to the whitelist.
+     * @param _target Address of the contract.
+     */
+    function addCodeToWhitelist(address _target) external onlyGovernance {
         codeWhitelist[getContractHash(_target)] = true;
         emit AddedCodeToWhitelist(_target);
     }
 
-    function removeCodeFromWhitelist(address _target) public onlyGovernance {
+    /**
+     * @notice Removes a contract's code hash from the whitelist.
+     * @param _target Address of the contract.
+     */
+    function removeCodeFromWhitelist(address _target) external onlyGovernance {
         codeWhitelist[getContractHash(_target)] = false;
         emit RemovedCodeFromWhitelist(_target);
     }
 
-    function setRewardForwarder(address _rewardForwarder) public onlyGovernance {
+    /**
+     * @notice Sets the reward forwarder address.
+     * @param _rewardForwarder Address of the new reward forwarder.
+     */
+    function setRewardForwarder(address _rewardForwarder) external onlyGovernance {
         require(_rewardForwarder != address(0), "new reward forwarder should not be empty");
         rewardForwarder = _rewardForwarder;
     }
 
-    function setTargetToken(address _targetToken) public onlyGovernance {
+    /**
+     * @notice Sets the target token.
+     * @param _targetToken Address of the new target token.
+     */
+    function setTargetToken(address _targetToken) external onlyGovernance {
         require(_targetToken != address(0), "new target token should not be empty");
         targetToken = _targetToken;
     }
 
-    function setProfitSharingReceiver(address _profitSharingReceiver) public onlyGovernance {
+    /**
+     * @notice Sets the profit-sharing receiver address.
+     * @param _profitSharingReceiver Address of the new profit-sharing receiver.
+     */
+    function setProfitSharingReceiver(address _profitSharingReceiver) external onlyGovernance {
         require(_profitSharingReceiver != address(0), "new profit sharing receiver should not be empty");
         profitSharingReceiver = _profitSharingReceiver;
     }
 
-    function setProtocolFeeReceiver(address _protocolFeeReceiver) public onlyGovernance {
+    /**
+     * @notice Sets the protocol fee receiver address.
+     * @param _protocolFeeReceiver Address of the new protocol fee receiver.
+     */
+    function setProtocolFeeReceiver(address _protocolFeeReceiver) external onlyGovernance {
         require(_protocolFeeReceiver != address(0), "new protocol fee receiver should not be empty");
         protocolFeeReceiver = _protocolFeeReceiver;
     }
 
-    function setUniversalLiquidator(address _universalLiquidator) public onlyGovernance {
+    /**
+     * @notice Sets the universal liquidator address.
+     * @param _universalLiquidator Address of the new universal liquidator.
+     */
+    function setUniversalLiquidator(address _universalLiquidator) external onlyGovernance {
         require(_universalLiquidator != address(0), "new universal liquidator should not be empty");
         universalLiquidator = _universalLiquidator;
     }
 
-    function setDolomiteYieldFarmingRouter(address _dolomiteYieldFarmingRouter) public onlyGovernance {
-        require(_dolomiteYieldFarmingRouter != address(0), "new reward forwarder should not be empty");
-        dolomiteYieldFarmingRouter = _dolomiteYieldFarmingRouter;
-    }
-
-    function getPricePerFullShare(address _vault) public view returns (uint256) {
+    /**
+     * @notice Returns the price per full share of a given vault.
+     * @param _vault Address of the vault.
+     * @return The price per full share.
+     */
+    function getPricePerFullShare(address _vault) external view returns (uint256) {
         return IVault(_vault).getPricePerFullShare();
     }
 
+    /**
+     * @notice Executes `doHardWork` for a specific vault.
+     * @param _vault Address of the vault.
+     */
     function doHardWork(address _vault) external onlyHardWorkerOrGovernance {
         uint256 oldSharePrice = IVault(_vault).getPricePerFullShare();
         IVault(_vault).doHardWork();
@@ -220,45 +287,70 @@ contract Controller is Governable {
         );
     }
 
-    function addHardWorker(address _worker) public onlyGovernance {
+    /**
+     * @notice Adds an address as a hard worker.
+     * @param _worker Address to be added as a hard worker.
+     */
+    function addHardWorker(address _worker) external onlyGovernance {
         require(_worker != address(0), "_worker must be defined");
         hardWorkers[_worker] = true;
     }
 
-    function removeHardWorker(address _worker) public onlyGovernance {
+    /**
+     * @notice Removes an address from the list of hard workers.
+     * @param _worker Address to be removed from the list of hard workers.
+     */
+    function removeHardWorker(address _worker) external onlyGovernance {
         require(_worker != address(0), "_worker must be defined");
         hardWorkers[_worker] = false;
     }
 
-    // transfers token in the controller contract to the governance
+    /**
+     * @notice Salvages a specified amount of tokens to the governance address.
+     * @param _token Address of the token to salvage.
+     * @param _amount Amount of tokens to salvage.
+     */
     function salvage(address _token, uint256 _amount) external onlyGovernance {
         IERC20(_token).safeTransfer(governance(), _amount);
     }
 
+    /**
+     * @notice Salvages tokens from a specific strategy.
+     * @param _strategy Address of the strategy.
+     * @param _token Address of the token to salvage.
+     * @param _amount Amount of tokens to salvage.
+     */
     function salvageStrategy(address _strategy, address _token, uint256 _amount) external onlyGovernance {
-        // the strategy is responsible for maintaining the list of
-        // salvageable tokens, to make sure that governance cannot come
-        // in and take away the coins
         IStrategy(_strategy).salvageToken(governance(), _token, _amount);
     }
 
-    function feeDenominator() public pure returns (uint) {
-        // keep the interface for this function as a `view` for now, in case it changes in the future
+    /**
+     * @notice Returns the denominator used in fee calculations.
+     * @return The fee denominator value.
+     */
+    function feeDenominator() external pure returns (uint) {
         return FEE_DENOMINATOR;
     }
 
-    function setProfitSharingNumerator(uint _profitSharingNumerator) public onlyGovernance {
+    /**
+     * @notice Schedules an update for the profit-sharing numerator.
+     * @param _profitSharingNumerator New profit-sharing numerator.
+     */
+    function setProfitSharingNumerator(uint _profitSharingNumerator) external onlyGovernance {
         require(
-            _profitSharingNumerator + strategistFeeNumerator + platformFeeNumerator <= MAX_TOTAL_FEE,
+            _profitSharingNumerator.add(strategistFeeNumerator).add(platformFeeNumerator) <= MAX_TOTAL_FEE,
             "total fee too high"
         );
 
         nextProfitSharingNumerator = _profitSharingNumerator;
-        nextProfitSharingNumeratorTimestamp = block.timestamp + nextImplementationDelay;
+        nextProfitSharingNumeratorTimestamp = block.timestamp.add(nextImplementationDelay);
         emit QueueProfitSharingChange(nextProfitSharingNumerator, nextProfitSharingNumeratorTimestamp);
     }
 
-    function confirmSetProfitSharingNumerator() public onlyGovernance {
+    /**
+     * @notice Confirms the scheduled profit-sharing numerator change.
+     */
+    function confirmSetProfitSharingNumerator() external onlyGovernance {
         require(
             nextProfitSharingNumerator != 0
             && nextProfitSharingNumeratorTimestamp != 0
@@ -266,7 +358,7 @@ contract Controller is Governable {
             "invalid timestamp or no new profit sharing numerator confirmed"
         );
         require(
-            nextProfitSharingNumerator + strategistFeeNumerator + platformFeeNumerator <= MAX_TOTAL_FEE,
+            nextProfitSharingNumerator.add(strategistFeeNumerator).add(platformFeeNumerator) <= MAX_TOTAL_FEE,
             "total fee too high"
         );
 
@@ -276,18 +368,25 @@ contract Controller is Governable {
         emit ConfirmProfitSharingChange(profitSharingNumerator);
     }
 
-    function setStrategistFeeNumerator(uint _strategistFeeNumerator) public onlyGovernance {
+    /**
+     * @notice Schedules an update for the strategist fee numerator.
+     * @param _strategistFeeNumerator New strategist fee numerator.
+     */
+    function setStrategistFeeNumerator(uint _strategistFeeNumerator) external onlyGovernance {
         require(
-            _strategistFeeNumerator + platformFeeNumerator + profitSharingNumerator <= MAX_TOTAL_FEE,
+            _strategistFeeNumerator.add(platformFeeNumerator).add(profitSharingNumerator) <= MAX_TOTAL_FEE,
             "total fee too high"
         );
 
         nextStrategistFeeNumerator = _strategistFeeNumerator;
-        nextStrategistFeeNumeratorTimestamp = block.timestamp + nextImplementationDelay;
+        nextStrategistFeeNumeratorTimestamp = block.timestamp.add(nextImplementationDelay);
         emit QueueStrategistFeeChange(nextStrategistFeeNumerator, nextStrategistFeeNumeratorTimestamp);
     }
 
-    function confirmSetStrategistFeeNumerator() public onlyGovernance {
+    /**
+     * @notice Confirms the scheduled strategist fee numerator change.
+     */
+    function confirmSetStrategistFeeNumerator() external onlyGovernance {
         require(
             nextStrategistFeeNumerator != 0
             && nextStrategistFeeNumeratorTimestamp != 0
@@ -295,7 +394,7 @@ contract Controller is Governable {
             "invalid timestamp or no new strategist fee numerator confirmed"
         );
         require(
-            nextStrategistFeeNumerator + platformFeeNumerator + profitSharingNumerator <= MAX_TOTAL_FEE,
+            nextStrategistFeeNumerator.add(platformFeeNumerator).add(profitSharingNumerator) <= MAX_TOTAL_FEE,
             "total fee too high"
         );
 
@@ -305,18 +404,25 @@ contract Controller is Governable {
         emit ConfirmStrategistFeeChange(strategistFeeNumerator);
     }
 
-    function setPlatformFeeNumerator(uint _platformFeeNumerator) public onlyGovernance {
+    /**
+     * @notice Schedules an update for the platform fee numerator.
+     * @param _platformFeeNumerator New platform fee numerator.
+     */
+    function setPlatformFeeNumerator(uint _platformFeeNumerator) external onlyGovernance {
         require(
-            _platformFeeNumerator + strategistFeeNumerator + profitSharingNumerator <= MAX_TOTAL_FEE,
+            _platformFeeNumerator.add(strategistFeeNumerator).add(profitSharingNumerator) <= MAX_TOTAL_FEE,
             "total fee too high"
         );
 
         nextPlatformFeeNumerator = _platformFeeNumerator;
-        nextPlatformFeeNumeratorTimestamp = block.timestamp + nextImplementationDelay;
+        nextPlatformFeeNumeratorTimestamp = block.timestamp.add(nextImplementationDelay);
         emit QueuePlatformFeeChange(nextPlatformFeeNumerator, nextPlatformFeeNumeratorTimestamp);
     }
 
-    function confirmSetPlatformFeeNumerator() public onlyGovernance {
+    /**
+     * @notice Confirms the scheduled platform fee numerator change.
+     */
+    function confirmSetPlatformFeeNumerator() external onlyGovernance {
         require(
             nextPlatformFeeNumerator != 0
             && nextPlatformFeeNumeratorTimestamp != 0
@@ -324,7 +430,7 @@ contract Controller is Governable {
             "invalid timestamp or no new platform fee numerator confirmed"
         );
         require(
-            nextPlatformFeeNumerator + strategistFeeNumerator + profitSharingNumerator <= MAX_TOTAL_FEE,
+            nextPlatformFeeNumerator.add(strategistFeeNumerator).add(profitSharingNumerator) <= MAX_TOTAL_FEE,
             "total fee too high"
         );
 
@@ -334,18 +440,25 @@ contract Controller is Governable {
         emit ConfirmPlatformFeeChange(platformFeeNumerator);
     }
 
-    function setNextImplementationDelay(uint256 _nextImplementationDelay) public onlyGovernance {
+    /**
+     * @notice Sets a new delay for implementation upgrades.
+     * @param _nextImplementationDelay New delay value.
+     */
+    function setNextImplementationDelay(uint256 _nextImplementationDelay) external onlyGovernance {
         require(
             _nextImplementationDelay > 0,
             "invalid _nextImplementationDelay"
         );
 
         tempNextImplementationDelay = _nextImplementationDelay;
-        tempNextImplementationDelayTimestamp = block.timestamp + nextImplementationDelay;
+        tempNextImplementationDelayTimestamp = block.timestamp.add(nextImplementationDelay);
         emit QueueNextImplementationDelay(tempNextImplementationDelay, tempNextImplementationDelayTimestamp);
     }
 
-    function confirmNextImplementationDelay() public onlyGovernance {
+    /**
+     * @notice Confirms the scheduled implementation delay change.
+     */
+    function confirmNextImplementationDelay() external onlyGovernance {
         require(
             tempNextImplementationDelayTimestamp != 0 && block.timestamp >= tempNextImplementationDelayTimestamp,
             "invalid timestamp or no new implementation delay confirmed"

@@ -1,29 +1,41 @@
-//SPDX-License-Identifier: Unlicense
+// SPDX-License-Identifier: Unlicense
 pragma solidity 0.6.12;
 
 import "@openzeppelin/contracts/math/Math.sol";
 import "@openzeppelin/contracts/math/SafeMath.sol";
 import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
 import "../../base/interface/IUniversalLiquidator.sol";
-import "../../base/interface/IVault.sol";
 import "../../base/upgradability/BaseUpgradeableStrategy.sol";
 import "../../base/interface/compound/IComet.sol";
 import "../../base/interface/compound/ICometRewards.sol";
 
+/**
+ * @title CompoundStrategy
+ * @dev A strategy for depositing assets into Compound's Comet protocol for yield and reward generation,
+ * allowing interaction with staking pools, reward claiming, and liquidation. Inherits from `BaseUpgradeableStrategy`.
+ */
 contract CompoundStrategy is BaseUpgradeableStrategy {
-
   using SafeMath for uint256;
   using SafeERC20 for IERC20;
 
   address public constant harvestMSIG = address(0x97b3e5712CDE7Db13e939a188C8CA90Db5B05131);
 
-  // additional storage slots (on top of BaseUpgradeableStrategy ones) are defined here
+  // Additional storage slots (specific to this strategy)
   bytes32 internal constant _MARKET_SLOT = 0x7e894854bb2aa938fcac0eb9954ddb51bd061fc228fb4e5b8e859d96c06bfaa0;
 
   constructor() public BaseUpgradeableStrategy() {
     assert(_MARKET_SLOT == bytes32(uint256(keccak256("eip1967.strategyStorage.market")) - 1));
   }
 
+  /**
+   * @notice Initializes the strategy and verifies compatibility with Compound's Comet market.
+   * @param _storage Address of the storage contract.
+   * @param _underlying Address of the underlying asset.
+   * @param _vault Address of the vault.
+   * @param _market Address of the Comet market.
+   * @param _rewardPool Address of the reward pool.
+   * @param _rewardToken Address of the reward token.
+   */
   function initializeBaseStrategy(
     address _storage,
     address _underlying,
@@ -32,7 +44,6 @@ contract CompoundStrategy is BaseUpgradeableStrategy {
     address _rewardPool,
     address _rewardToken
   ) public initializer {
-
     BaseUpgradeableStrategy.initialize(
       _storage,
       _underlying,
@@ -48,25 +59,35 @@ contract CompoundStrategy is BaseUpgradeableStrategy {
     _setMarket(_market);
   }
 
-  function depositArbCheck() public pure returns(bool) {
-    return true;
-  }
-
+  /**
+   * @notice Gets the current balance of the reward pool for this strategy.
+   * @return balance The balance in the reward pool.
+   */
   function _rewardPoolBalance() internal view returns (uint256 balance) {
-      balance = IComet(market()).balanceOf(address(this));
+    balance = IComet(market()).balanceOf(address(this));
   }
 
+  /**
+   * @notice Exits the reward pool in case of an emergency.
+   */
   function _emergencyExitRewardPool() internal {
     uint256 stakedBalance = _rewardPoolBalance();
     if (stakedBalance != 0) {
-        _withdrawUnderlyingFromPool(stakedBalance);
+      _withdrawUnderlyingFromPool(stakedBalance);
     }
   }
 
+  /**
+   * @notice Withdraws a specified amount of underlying tokens from the reward pool.
+   * @param amount Amount of tokens to withdraw.
+   */
   function _withdrawUnderlyingFromPool(uint256 amount) internal {
     IComet(market()).withdraw(underlying(), Math.min(_rewardPoolBalance(), amount));
   }
 
+  /**
+   * @notice Supplies the entire balance of underlying tokens to the reward pool.
+   */
   function _enterRewardPool() internal {
     address underlying_ = underlying();
     address market_ = market();
@@ -76,42 +97,51 @@ contract CompoundStrategy is BaseUpgradeableStrategy {
     IComet(market_).supply(underlying_, entireBalance);
   }
 
+  /**
+   * @notice Invests all underlying tokens in the reward pool if investing is not paused.
+   */
   function _investAllUnderlying() internal onlyNotPausedInvesting {
-    // this check is needed, because most of the SNX reward pools will revert if
-    // you try to stake(0).
-    if(IERC20(underlying()).balanceOf(address(this)) > 0) {
+    if (IERC20(underlying()).balanceOf(address(this)) > 0) {
       _enterRewardPool();
     }
   }
 
-  /*
-  *   In case there are some issues discovered about the pool or underlying asset
-  *   Governance can exit the pool properly
-  *   The function is only used for emergency to exit the pool
-  */
+  /**
+   * @notice Emergency function to exit the reward pool and stop investing.
+   */
   function emergencyExit() public onlyGovernance {
     _emergencyExitRewardPool();
     _setPausedInvesting(true);
   }
 
-  /*
-  *   Resumes the ability to invest into the underlying reward pools
-  */
+  /**
+   * @notice Resumes investing in the reward pool after being paused.
+   */
   function continueInvesting() public onlyGovernance {
     _setPausedInvesting(false);
   }
 
+  /**
+   * @notice Checks if a given token is non-salvageable (i.e., cannot be removed from the strategy).
+   * @param token Address of the token to check.
+   * @return Boolean indicating if the token is non-salvageable.
+   */
   function unsalvagableTokens(address token) public view returns (bool) {
     return (token == rewardToken() || token == underlying() || token == market());
   }
 
+  /**
+   * @notice Claims rewards from the reward pool.
+   */
   function _claimReward() internal {
     ICometRewards(rewardPool()).claim(market(), address(this), true);
   }
 
+  /**
+   * @notice Liquidates rewards by converting them to the underlying asset.
+   */
   function _liquidateReward() internal {
     if (!sell()) {
-      // Profits can be disabled for possible simplified and rapid exit
       emit ProfitsNotCollected(sell(), false);
       return;
     }
@@ -134,9 +164,9 @@ contract CompoundStrategy is BaseUpgradeableStrategy {
     }
   }
 
-  /*
-  *   Withdraws all the asset to the vault
-  */
+  /**
+   * @notice Withdraws all underlying assets to the vault.
+   */
   function withdrawAllToVault() public restricted {
     _withdrawUnderlyingFromPool(_rewardPoolBalance());
     _claimReward();
@@ -145,18 +175,15 @@ contract CompoundStrategy is BaseUpgradeableStrategy {
     IERC20(underlying_).safeTransfer(vault(), IERC20(underlying_).balanceOf(address(this)));
   }
 
-  /*
-  *   Withdraws all the asset to the vault
-  */
+  /**
+   * @notice Withdraws a specified amount of underlying assets to the vault.
+   * @param _amount Amount of underlying assets to withdraw.
+   */
   function withdrawToVault(uint256 _amount) public restricted {
-    // Typically there wouldn't be any amount here
-    // however, it is possible because of the emergencyExit
     address underlying_ = underlying();
     uint256 entireBalance = IERC20(underlying_).balanceOf(address(this));
 
-    if(_amount > entireBalance){
-      // While we have the check above, we still using SafeMath below
-      // for the peace of mind (in case something gets changed in between)
+    if (_amount > entireBalance) {
       uint256 needToWithdraw = _amount.sub(entireBalance);
       uint256 toWithdraw = Math.min(_rewardPoolBalance(), needToWithdraw);
       _withdrawUnderlyingFromPool(toWithdraw);
@@ -164,39 +191,31 @@ contract CompoundStrategy is BaseUpgradeableStrategy {
     IERC20(underlying_).safeTransfer(vault(), _amount);
   }
 
-  /*
-  *   Note that we currently do not have a mechanism here to include the
-  *   amount of reward that is accrued.
-  */
+  /**
+   * @notice Returns the total balance of underlying assets managed by the strategy.
+   * @return Total balance of underlying assets.
+   */
   function investedUnderlyingBalance() external view returns (uint256) {
     if (rewardPool() == address(0)) {
       return IERC20(underlying()).balanceOf(address(this));
     }
-    // Adding the amount locked in the reward pool and the amount that is somehow in this contract
-    // both are in the units of "underlying"
-    // The second part is needed because there is the emergency exit mechanism
-    // which would break the assumption that all the funds are always inside of the reward pool
     return _rewardPoolBalance().add(IERC20(underlying()).balanceOf(address(this)));
   }
 
-  /*
-  *   Governance or Controller can claim coins that are somehow transferred into the contract
-  *   Note that they cannot come in take away coins that are used and defined in the strategy itself
-  */
+  /**
+   * @notice Allows governance or the controller to salvage tokens that are not part of the core strategy.
+   * @param recipient Address to receive the salvaged tokens.
+   * @param token Address of the token to salvage.
+   * @param amount Amount of tokens to salvage.
+   */
   function salvage(address recipient, address token, uint256 amount) external onlyControllerOrGovernance {
-     // To make sure that governance cannot come in and take away the coins
-    require(!unsalvagableTokens(token), "token is defined as not salvagable");
+    require(!unsalvagableTokens(token), "Token is non-salvageable");
     IERC20(token).safeTransfer(recipient, amount);
   }
 
-  /*
-  *   Get the reward, sell it in exchange for underlying, invest what you got.
-  *   It's not much, but it's honest work.
-  *
-  *   Note that although `onlyNotPausedInvesting` is not added here,
-  *   calling `investAllUnderlying()` affectively blocks the usage of `doHardWork`
-  *   when the investing is being paused by governance.
-  */
+  /**
+   * @notice Claims rewards, sells them, and reinvests in the reward pool.
+   */
   function doHardWork() external onlyNotPausedInvesting restricted {
     _claimReward();
     _liquidateReward();
@@ -204,21 +223,32 @@ contract CompoundStrategy is BaseUpgradeableStrategy {
   }
 
   /**
-  * Can completely disable claiming UNI rewards and selling. Good for emergency withdraw in the
-  * simplest possible way.
-  */
+   * @notice Enables or disables the selling of rewards for the strategy.
+   * @param s Boolean to enable or disable selling.
+   */
   function setSell(bool s) public onlyGovernance {
     _setSell(s);
   }
 
+  /**
+   * @notice Internal function to set the address of the Compound Comet market.
+   * @param _address Address of the Compound Comet market.
+   */
   function _setMarket(address _address) internal {
     setAddress(_MARKET_SLOT, _address);
   }
 
+  /**
+   * @notice Returns the address of the Compound Comet market.
+   * @return Address of the market.
+   */
   function market() public view returns (address) {
     return getAddress(_MARKET_SLOT);
   }
 
+  /**
+   * @notice Finalizes the strategy upgrade.
+   */
   function finalizeUpgrade() external onlyGovernance {
     _finalizeUpgrade();
   }

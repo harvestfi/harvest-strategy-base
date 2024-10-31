@@ -46,10 +46,6 @@ interface IPotPool {
 
     function exit() external;
 
-    /**
-     * A push mechanism for accounts that have not claimed their rewards for a long time. The implementation is
-     * semantically analogous to getReward(), but uses a push pattern instead of pull pattern.
-     */
     function pushAllRewards(address _recipient) external;
 
     function getAllRewards() external;
@@ -60,9 +56,6 @@ interface IPotPool {
 
     function removeRewardToken(address _rewardToken) external;
 
-    /**
-     * @return If the return value is MAX_UINT256, it means that the specified reward token is not in the list
-     */
     function getRewardTokenIndex(address _rewardToken) external view returns (uint256);
 
     function notifyTargetRewardAmount(address _rewardToken, uint256 _reward) external;

@@ -3,7 +3,7 @@ pragma solidity 0.6.12;
 
 import "./CompoundStrategy.sol";
 
-contract CompoundStrategyMainnet_USDC is CompoundStrategy {
+contract CompoundStrategyMainnet_USDbC is CompoundStrategy {
 
   constructor() public {}
 

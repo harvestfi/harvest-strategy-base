@@ -14,33 +14,48 @@ import "./interface/IUniversalLiquidator.sol";
 import "./inheritance/Controllable.sol";
 
 /**
- * @dev This contract receives rewards from strategies and is responsible for routing the reward's liquidation into
- *      specific buyback tokens and profit tokens for the DAO.
+ * @title RewardForwarder
+ * @dev This contract receives rewards from strategies, handles reward liquidation, and distributes fees to specified
+ * parties. It converts rewards into target tokens or profit tokens for the DAO.
+ * Inherits from `Controllable` to ensure governance and controller-controlled access.
  */
 contract RewardForwarder is Controllable {
     using SafeERC20 for IERC20;
     using SafeMath for uint256;
 
+    /// @notice Address of the iFARM token used for profit-sharing
     address public constant iFARM = address(0xE7798f023fC62146e8Aa1b36Da45fb70855a77Ea);
 
-    constructor(
-        address _storage
-    ) public Controllable(_storage) {}
+    /**
+     * @notice Initializes the RewardForwarder contract.
+     * @param _storage Address of the storage contract.
+     */
+    constructor(address _storage) public Controllable(_storage) {}
 
+    /**
+     * @notice Routes fees collected from a strategy to designated recipients.
+     * @param _token Address of the token being used for the fee payment.
+     * @param _profitSharingFee Amount allocated for profit sharing.
+     * @param _strategistFee Amount allocated for the strategist.
+     * @param _platformFee Amount allocated as the platform fee.
+     */
     function notifyFee(
         address _token,
         uint256 _profitSharingFee,
         uint256 _strategistFee,
         uint256 _platformFee
     ) external {
-        _notifyFee(
-            _token,
-            _profitSharingFee,
-            _strategistFee,
-            _platformFee
-        );
+        _notifyFee(_token, _profitSharingFee, _strategistFee, _platformFee);
     }
 
+    /**
+     * @dev Internal function to handle fee distribution and token conversion if necessary.
+     * @param _token Address of the fee token.
+     * @param _profitSharingFee Amount allocated for profit sharing.
+     * @param _strategistFee Amount allocated for the strategist.
+     * @param _platformFee Amount allocated as the platform fee.
+     * Transfers the specified amounts to the designated recipients, converting tokens if necessary.
+     */
     function _notifyFee(
         address _token,
         uint256 _profitSharingFee,
@@ -52,6 +67,7 @@ contract RewardForwarder is Controllable {
 
         uint totalTransferAmount = _profitSharingFee.add(_strategistFee).add(_platformFee);
         require(totalTransferAmount > 0, "totalTransferAmount should not be 0");
+        
         IERC20(_token).safeTransferFrom(msg.sender, address(this), totalTransferAmount);
 
         address _targetToken = IController(_controller).targetToken();

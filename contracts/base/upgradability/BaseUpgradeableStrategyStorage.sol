@@ -138,7 +138,6 @@ contract BaseUpgradeableStrategyStorage is ControllableInit {
     return getAddress(_VAULT_SLOT);
   }
 
-  // a flag for disabling selling for simplified emergency exit
   function _setSell(bool _value) internal {
     setBoolean(_SELL_SLOT, _value);
   }

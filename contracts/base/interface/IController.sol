@@ -31,13 +31,6 @@ interface IController {
 
     // ==================== Functions ====================
 
-    /**
-     * An EOA can safely interact with the system no matter what. If you're using Metamask, you're using an EOA. Only
-     * smart contracts may be affected by this grey list. This contract will not be able to ban any EOA from the system
-     * even if an EOA is being added to the greyList, he/she will still be able to interact with the whole system as if
-     * nothing happened. Only smart contracts will be affected by being added to the greyList. This grey list is only
-     * used in VaultV3.sol, see the code there for reference
-     */
     function greyList(address _target) external view returns (bool);
 
     function addressWhiteList(address _target) external view returns (bool);
@@ -62,9 +55,6 @@ interface IController {
 
     function salvageStrategy(address _strategy, address _token, uint256 amount) external;
 
-    /**
-     * @return The targeted profit token to convert all-non-compounding rewards to. Defaults to WETH.
-     */
     function targetToken() external view returns (address);
 
     function setTargetToken(address _targetToken) external;
@@ -84,10 +74,6 @@ interface IController {
     function universalLiquidator() external view returns (address);
 
     function setUniversalLiquidator(address _universalLiquidator) external;
-
-    function dolomiteYieldFarmingRouter() external view returns (address);
-
-    function setDolomiteYieldFarmingRouter(address _value) external;
 
     function nextImplementationDelay() external view returns (uint256);
 
