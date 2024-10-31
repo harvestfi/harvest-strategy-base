@@ -7,14 +7,13 @@ const {
 } = require("../utilities/hh-utils.js");
 
 const addresses = require("../test-config.js");
-const { send } = require("@openzeppelin/test-helpers");
 const BigNumber = require("bignumber.js");
 const IERC20 = artifacts.require("IERC20");
 
 //const Strategy = artifacts.require("");
 const Strategy = artifacts.require("AerodromeStableStrategyMainnet_jEUR_EURC");
 
-// Developed and tested at blockNumber 21332890
+// Developed and tested at blockNumber 21793300
 
 // Vanilla Mocha test. Increased compatibility with tools that integrate Mocha.
 describe("Base Mainnet Aerodrome jEUR-EURC", function() {
@@ -24,11 +23,7 @@ describe("Base Mainnet Aerodrome jEUR-EURC", function() {
   let underlying;
 
   // external setup
-  let underlyingWhale = "0x22fA3239c4bf43D05CC587ff40ea3bA5841C6709";
-  let aero = "0x940181a94A35A4569E4529A3CDfB74e38FD98631";
-  let jeur = "0x4154550f4Db74Dc38d1FE98e1F3F28ed6daD627d";
-  let eurc = "0x60a3E35Cc302bFA44Cb288Bc5a4F316Fdb1adb42";
-  let weth = "0x4200000000000000000000000000000000000006";
+  let underlyingWhale = "0x15A751314b1DDD9546D473322DF0579663c4C05c";
 
   // parties in the protocol
   let governance;
@@ -63,7 +58,7 @@ describe("Base Mainnet Aerodrome jEUR-EURC", function() {
     farmer1 = accounts[1];
 
     // impersonate accounts
-    await impersonates([governance, underlyingWhale, addresses.ULOwner]);
+    await impersonates([governance, underlyingWhale]);
 
     let etherGiver = accounts[9];
     await web3.eth.sendTransaction({ from: etherGiver, to: governance, value: 10e18});
@@ -76,12 +71,6 @@ describe("Base Mainnet Aerodrome jEUR-EURC", function() {
       "strategyArtifactIsUpgradable": true,
       "underlying": underlying,
       "governance": governance,
-      "liquidation": [
-        {"aerodrome": [aero, weth]},
-        {"aerodrome": [weth, eurc]},
-        {"aerodrome": [eurc, jeur]},
-      ],
-      "ULOwner": addresses.ULOwner
     });
 
     // whale send underlying to farmers

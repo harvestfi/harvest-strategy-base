@@ -7,14 +7,13 @@ const {
 } = require("../utilities/hh-utils.js");
 
 const addresses = require("../test-config.js");
-const { send } = require("@openzeppelin/test-helpers");
 const BigNumber = require("bignumber.js");
 const IERC20 = artifacts.require("IERC20");
 
 //const Strategy = artifacts.require("");
 const Strategy = artifacts.require("ExtraFiLendStrategyMainnet_AERO");
 
-// Developed and tested at blockNumber 19374750
+// Developed and tested at blockNumber 21793300
 
 // Vanilla Mocha test. Increased compatibility with tools that integrate Mocha.
 describe("Arbitrum Mainnet ExtraFi Lend AERO", function() {
@@ -24,10 +23,7 @@ describe("Arbitrum Mainnet ExtraFi Lend AERO", function() {
   let underlying;
 
   // external setup
-  let underlyingWhale = "0x66D73cd5F3F4659575FD668EfDEa03193f2dD651";
-  let weth = "0x4200000000000000000000000000000000000006";
-  let usdc = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
-  let extra = "0x2dAD3a13ef0C6366220f989157009e501e7938F8";
+  let underlyingWhale = "0x2387BB9c97D9e86aFae0Fc694f3012A7080D6D89";
 
   // parties in the protocol
   let governance;
@@ -73,9 +69,6 @@ describe("Arbitrum Mainnet ExtraFi Lend AERO", function() {
       "strategyArtifactIsUpgradable": true,
       "underlying": underlying,
       "governance": governance,
-      "liquidation": [
-        {"aerodrome": [extra, weth]},
-      ],
     });
 
     // whale send underlying to farmers

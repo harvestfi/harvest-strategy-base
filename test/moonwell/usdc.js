@@ -7,14 +7,13 @@ const {
 } = require("../utilities/hh-utils.js");
 
 const addresses = require("../test-config.js");
-const { send } = require("@openzeppelin/test-helpers");
 const BigNumber = require("bignumber.js");
 const IERC20 = artifacts.require("IERC20");
 
 //const Strategy = artifacts.require("");
-const Strategy = artifacts.require("MoonwellFoldStrategyMainnet_USDC");
+const Strategy = artifacts.require("MoonwellFoldStrategyV2Mainnet_USDC");
 
-// Developed and tested at blockNumber 4733000
+// Developed and tested at blockNumber 21793300
 
 // Vanilla Mocha test. Increased compatibility with tools that integrate Mocha.
 describe("Base Mainnet Moonwell Fold USDC", function() {
@@ -24,9 +23,7 @@ describe("Base Mainnet Moonwell Fold USDC", function() {
   let underlying;
 
   // external setup
-  let underlyingWhale = "0xCf58eaC3C7D16796Aea617a7E2461c99CaCDFf1D";
-  let well = "0xFF8adeC2221f9f4D8dfbAFa6B9a297d17603493D";
-  let weth = "0x4200000000000000000000000000000000000006";
+  let underlyingWhale = "0xE2B12C8842a2822B2fe08C3dA56531794951Ceb4";
   
   // parties in the protocol
   let governance;
@@ -72,10 +69,6 @@ describe("Base Mainnet Moonwell Fold USDC", function() {
       "strategyArtifactIsUpgradable": true,
       "underlying": underlying,
       "governance": governance,
-      "liquidation": [
-        {"aerodrome": [well, weth, underlying.address]},
-      ],
-      "ULOwner": addresses.ULOwner
     });
 
     // whale send underlying to farmers

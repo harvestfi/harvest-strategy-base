@@ -28,8 +28,8 @@ async function setupCoreProtocol(config) {
     vault = await Vault.at(config.existingVaultAddress);
     console.log("Fetching Vault at: ", vault.address);
   } else {
-    const implAddress = config.vaultImplementationOverride || addresses.VaultImplementation;
-    vault = await makeVault(implAddress, addresses.Storage, config.underlying.address, 100, 100, {
+    const impl = await Vault.new();
+    vault = await makeVault(impl.address, addresses.Storage, config.underlying.address, 100, 100, {
       from: config.governance,
     });
     console.log("New Vault Deployed: ", vault.address);

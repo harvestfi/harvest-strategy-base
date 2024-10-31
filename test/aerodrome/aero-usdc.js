@@ -7,14 +7,13 @@ const {
 } = require("../utilities/hh-utils.js");
 
 const addresses = require("../test-config.js");
-const { send } = require("@openzeppelin/test-helpers");
 const BigNumber = require("bignumber.js");
 const IERC20 = artifacts.require("IERC20");
 
 //const Strategy = artifacts.require("");
 const Strategy = artifacts.require("AerodromeVolatileStrategyMainnet_AERO_USDC");
 
-// Developed and tested at blockNumber 3360500
+// Developed and tested at blockNumber 21793300
 
 // Vanilla Mocha test. Increased compatibility with tools that integrate Mocha.
 describe("Arbitrum Mainnet Aerodrome AERO-USDC", function() {
@@ -24,9 +23,7 @@ describe("Arbitrum Mainnet Aerodrome AERO-USDC", function() {
   let underlying;
 
   // external setup
-  let underlyingWhale = "0x2177B6F5665987CB9794B43c0DFA9d3e953A1e70";
-  let aero = "0x940181a94A35A4569E4529A3CDfB74e38FD98631";
-  let usdc = "0xd9aAEc86B65D86f6A7B5B1b0c42FFA531710b6CA";
+  let underlyingWhale = "0x1902EcfC34A4D2289759AFF23f6F104BC9B8eD53";
 
   // parties in the protocol
   let governance;
@@ -72,10 +69,6 @@ describe("Arbitrum Mainnet Aerodrome AERO-USDC", function() {
       "strategyArtifactIsUpgradable": true,
       "underlying": underlying,
       "governance": governance,
-      "liquidation": [
-        {"aerodrome": [aero, usdc]},
-        {"aerodrome": [usdc, aero]},
-      ]
     });
 
     // whale send underlying to farmers

@@ -7,17 +7,16 @@ const {
 } = require("../utilities/hh-utils.js");
 
 const addresses = require("../test-config.js");
-const { send } = require("@openzeppelin/test-helpers");
 const BigNumber = require("bignumber.js");
 const IERC20 = artifacts.require("IERC20");
 
 //const Strategy = artifacts.require("");
-const Strategy = artifacts.require("CompoundStrategyMainnet_USDC");
+const Strategy = artifacts.require("CompoundStrategyMainnet_USDbC");
 
-// Developed and tested at blockNumber 3345960
+// Developed and tested at blockNumber 21793300
 
 // Vanilla Mocha test. Increased compatibility with tools that integrate Mocha.
-describe("Arbitrum Mainnet Compound USDC", function() {
+describe("Arbitrum Mainnet Compound USDbC", function() {
   let accounts;
 
   // external contracts
@@ -25,7 +24,6 @@ describe("Arbitrum Mainnet Compound USDC", function() {
 
   // external setup
   let underlyingWhale = "0x20f03E26968B179025F65C1f4aFAdFD3959C8d03";
-  let comp = "0x9e1028F5F1D5eDE59748FFceE5532509976840E0";
 
   // parties in the protocol
   let governance;
@@ -71,7 +69,6 @@ describe("Arbitrum Mainnet Compound USDC", function() {
       "strategyArtifactIsUpgradable": true,
       "underlying": underlying,
       "governance": governance,
-      "liquidation": [{"uniV3": [comp, underlying.address]}]
     });
 
     // whale send underlying to farmers

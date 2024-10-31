@@ -399,6 +399,7 @@ contract VaultV1 is ERC20Upgradeable, IUpgradeSource, ControllableInit, VaultSto
   function _withdraw(uint256 numberOfShares, address receiver, address owner) internal returns (uint256) {
     require(totalSupply() > 0, "Vault has no shares");
     require(numberOfShares > 0, "numberOfShares must be greater than 0");
+    uint256 totalSupply = totalSupply();
 
     address sender = msg.sender;
     if (sender != owner) {
@@ -412,9 +413,9 @@ contract VaultV1 is ERC20Upgradeable, IUpgradeSource, ControllableInit, VaultSto
 
     uint256 underlyingAmountToWithdraw = underlyingBalanceWithInvestment()
         .mul(numberOfShares)
-        .div(totalSupply());
+        .div(totalSupply);
     if (underlyingAmountToWithdraw > underlyingBalanceInVault()) {
-      if (numberOfShares == totalSupply()) {
+      if (numberOfShares == totalSupply) {
         IStrategy(strategy()).withdrawAllToVault();
       } else {
         uint256 missing = underlyingAmountToWithdraw.sub(underlyingBalanceInVault());
@@ -422,7 +423,7 @@ contract VaultV1 is ERC20Upgradeable, IUpgradeSource, ControllableInit, VaultSto
       }
       underlyingAmountToWithdraw = MathUpgradeable.min(underlyingBalanceWithInvestment()
           .mul(numberOfShares)
-          .div(totalSupply()), underlyingBalanceInVault());
+          .div(totalSupply), underlyingBalanceInVault());
     }
 
     IERC20Upgradeable(underlying()).safeTransfer(receiver, underlyingAmountToWithdraw);
