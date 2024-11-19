@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity 0.6.12;
-pragma experimental ABIEncoderV2;
 
 import "@openzeppelin/contracts/math/Math.sol";
 import "@openzeppelin/contracts/math/SafeMath.sol";
@@ -22,6 +21,7 @@ contract ExtraFiLendStrategy is BaseUpgradeableStrategy {
   bytes32 internal constant _MARKET_SLOT = 0x7e894854bb2aa938fcac0eb9954ddb51bd061fc228fb4e5b8e859d96c06bfaa0;
   bytes32 internal constant _RESERVE_ID_SLOT = 0x86aa26bf7baa3789bd8bb93af5347b4e50191118805c3e074f92814ccc798549;
   bytes32 internal constant _STORED_SUPPLIED_SLOT = 0x280539da846b4989609abdccfea039bd1453e4f710c670b29b9eeaca0730c1a2;
+  bytes32 internal constant _PENDING_FEE_SLOT = 0x0af7af9f5ccfa82c3497f40c7c382677637aee27293a6243a22216b51481bd97;
 
   // this would be reset on each upgrade
   address[] public rewardTokens;
@@ -30,6 +30,7 @@ contract ExtraFiLendStrategy is BaseUpgradeableStrategy {
     assert(_MARKET_SLOT == bytes32(uint256(keccak256("eip1967.strategyStorage.market")) - 1));
     assert(_RESERVE_ID_SLOT == bytes32(uint256(keccak256("eip1967.strategyStorage.reserveId")) - 1));
     assert(_STORED_SUPPLIED_SLOT == bytes32(uint256(keccak256("eip1967.strategyStorage.storedSupplied")) - 1));
+    assert(_PENDING_FEE_SLOT == bytes32(uint256(keccak256("eip1967.strategyStorage.pendingFee")) - 1));
   }
 
   function initializeBaseStrategy(
@@ -77,28 +78,31 @@ contract ExtraFiLendStrategy is BaseUpgradeableStrategy {
   }
 
   function pendingFee() public view returns (uint256) {
+    return getUint256(_PENDING_FEE_SLOT);
+  }
+
+  function _accrueFee() internal {
     uint256 fee;
     if (currentBalance() > storedBalance()) {
-        uint256 balanceIncrease = currentBalance().sub(storedBalance());
-        fee = balanceIncrease.mul(totalFeeNumerator()).div(feeDenominator());
+      uint256 balanceIncrease = currentBalance().sub(storedBalance());
+      fee = balanceIncrease.mul(totalFeeNumerator()).div(feeDenominator());
     }
-    return fee;
+    setUint256(_PENDING_FEE_SLOT, pendingFee().add(fee));
+    _updateStoredBalance();
   }
 
   function _handleFee() internal {
+    _accrueFee();
     uint256 fee = pendingFee();
-    if (fee > 0) {
-      uint256 balanceIncrease = currentBalance().sub(storedBalance());
+    if (fee > 100) {
+      uint256 balanceIncrease = fee.mul(feeDenominator()).div(totalFeeNumerator());
       _redeem(fee);
       address _underlying = underlying();
       if (IERC20(_underlying).balanceOf(address(this)) < fee) {
         balanceIncrease = IERC20(_underlying).balanceOf(address(this)).mul(feeDenominator()).div(totalFeeNumerator());
       }
       _notifyProfitInRewardToken(_underlying, balanceIncrease);
-      uint256 balance = IERC20(_underlying).balanceOf(address(this));
-      if (balance > 0) {
-        _supply(balance);
-      }
+      setUint256(_PENDING_FEE_SLOT, 0);
     }
   }
 
@@ -132,13 +136,13 @@ contract ExtraFiLendStrategy is BaseUpgradeableStrategy {
     address _underlying = underlying();
     _redeemAll();
     if (IERC20(_underlying).balanceOf(address(this)) > 0) {
-      IERC20(_underlying).safeTransfer(vault(), IERC20(_underlying).balanceOf(address(this)));
+      IERC20(_underlying).safeTransfer(vault(), IERC20(_underlying).balanceOf(address(this)).sub(pendingFee()));
     }
     _updateStoredBalance();
   }
 
   function emergencyExit() external onlyGovernance {
-    _handleFee();
+    _accrueFee();
     _redeemAll();
     _setPausedInvesting(true);
     _updateStoredBalance();
@@ -149,7 +153,7 @@ contract ExtraFiLendStrategy is BaseUpgradeableStrategy {
   }
 
   function withdrawToVault(uint256 amountUnderlying) public restricted {
-    _handleFee();
+    _accrueFee();
     address _underlying = underlying();
     uint256 balance = IERC20(_underlying).balanceOf(address(this));
     if (amountUnderlying <= balance) {
@@ -238,7 +242,8 @@ contract ExtraFiLendStrategy is BaseUpgradeableStrategy {
   */
   function investedUnderlyingBalance() public view returns (uint256) {
     return IERC20(underlying()).balanceOf(address(this))
-    .add(storedBalance());
+    .add(storedBalance())
+    .sub(pendingFee());
   }
 
   function _supply(uint256 amount) internal {
