@@ -12,19 +12,19 @@ const BigNumber = require("bignumber.js");
 const IERC20 = artifacts.require("IERC20");
 
 //const Strategy = artifacts.require("");
-const Strategy = artifacts.require("CompoundStrategyMainnet_USDC");
+const Strategy = artifacts.require("CompoundStrategyMainnet_AERO");
 
 // Developed and tested at blockNumber 22742745
 
 // Vanilla Mocha test. Increased compatibility with tools that integrate Mocha.
-describe("Arbitrum Mainnet Compound USDC", function() {
+describe("Arbitrum Mainnet Compound AERO", function() {
   let accounts;
 
   // external contracts
   let underlying;
 
   // external setup
-  let underlyingWhale = "0x28c524ac2A95E2eA76a971085799FB27f45eE215";
+  let underlyingWhale = "0x3C200A005E6FCaCA37a7F8d5589a4555CD59D071";
   let comp = "0x9e1028F5F1D5eDE59748FFceE5532509976840E0";
 
   // parties in the protocol
@@ -40,7 +40,7 @@ describe("Arbitrum Mainnet Compound USDC", function() {
   let strategy;
 
   async function setupExternalContracts() {
-    underlying = await IERC20.at("0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913");
+    underlying = await IERC20.at("0x940181a94A35A4569E4529A3CDfB74e38FD98631");
     console.log("Fetching Underlying at: ", underlying.address);
   }
 
