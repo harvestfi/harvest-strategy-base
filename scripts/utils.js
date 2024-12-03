@@ -25,6 +25,7 @@ async function type2Transaction(callFunction, ...params) {
     gasLimit: 7e6
   });
   await tx.wait();
+  await new Promise(r => setTimeout(r, 2000))
   return tx;
 }
 

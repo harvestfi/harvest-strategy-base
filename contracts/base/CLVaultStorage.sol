@@ -10,6 +10,8 @@ contract CLVaultStorage is Initializable {
     bytes32 internal constant _TOKEN1_SLOT = 0x212adbc75c59ced7d534d662f6756f8ca81c23dd71f420016802caeecf2b4480;
     bytes32 internal constant _POS_ID_SLOT = 0xcac2a2b8ceeeafefb2148deaa91228172c726053b541e1b2f21a8b5a13690e37;
     bytes32 internal constant _POS_MANAGER_SLOT = 0x854680fb1da618abdf66ae3cb2fd403d849aec90034a6d8b3fd65fce65359c5a;
+    bytes32 internal constant _POS_WIDTH_SLOT = 0xabac5d119f6bf94e6c799323fbaed472fc0f9d185c90ab3abb85be2e533db395;
+    bytes32 internal constant _TARGET_WIDTH_SLOT = 0x9f43958f93320a028cf3ca962209d579ad24eed2c6a21b2cafb888745f11d6b7;
     bytes32 internal constant _TICK_UPPER_SLOT = 0x25b0d50e306b99e27d41d56e836c7a68b8976a7066b7ba51e22e0dbcc7f960da;
     bytes32 internal constant _TICK_LOWER_SLOT = 0x97d0853e434cd90e097e89bd1e5df075d931c7dfc04cf142779986efce0ec1f9;
     bytes32 internal constant _TICK_SPACING_SLOT = 0xfa5cd416162d7465a01d1be89e13b1dabf1a47ae42a5bec0e3a9c815500f6eea;
@@ -33,6 +35,8 @@ contract CLVaultStorage is Initializable {
         assert(_TOKEN1_SLOT == bytes32(uint256(keccak256("eip1967.vaultStorage.token1")) - 1));
         assert(_POS_ID_SLOT == bytes32(uint256(keccak256("eip1967.vaultStorage.posId")) - 1));
         assert(_POS_MANAGER_SLOT == bytes32(uint256(keccak256("eip1967.vaultStorage.posManager")) - 1));
+        assert(_POS_WIDTH_SLOT == bytes32(uint256(keccak256("eip1967.vaultStorage.posWidth")) - 1));
+        assert(_TARGET_WIDTH_SLOT == bytes32(uint256(keccak256("eip1967.vaultStorage.targetWidth")) - 1));
         assert(_TICK_UPPER_SLOT == bytes32(uint256(keccak256("eip1967.vaultStorage.tickUpper")) - 1));
         assert(_TICK_LOWER_SLOT == bytes32(uint256(keccak256("eip1967.vaultStorage.tickLower")) - 1));
         assert(_TICK_SPACING_SLOT == bytes32(uint256(keccak256("eip1967.vaultStorage.tickSpacing")) - 1));
@@ -46,10 +50,14 @@ contract CLVaultStorage is Initializable {
 
     function initialize(
         uint256 _posID,
-        address _posManager
+        address _posManager,
+        uint256 _posWidth,
+        uint256 _targetWidth
     ) public initializer {
         _setPosId(_posID);
         _setPosManager(_posManager);
+        _setPosWidth(_posWidth);
+        _setTargetWidth(_targetWidth);
         _setUnderlyingUnit(1e18);
         _setNextStrategyTimestamp(0);
         _setNextStrategy(address(0));
@@ -93,6 +101,22 @@ contract CLVaultStorage is Initializable {
 
     function _posManager() internal view returns (address) {
         return getAddress(_POS_MANAGER_SLOT);
+    }
+
+    function _setPosWidth(uint256 _value) internal {
+        setUint256(_POS_WIDTH_SLOT, _value);
+    }
+
+    function _posWidth() internal view returns (uint256) {
+        return getUint256(_POS_WIDTH_SLOT);
+    }
+
+    function _setTargetWidth(uint256 _value) internal {
+        setUint256(_TARGET_WIDTH_SLOT, _value);
+    }
+
+    function _targetWidth() internal view returns (uint256) {
+        return getUint256(_TARGET_WIDTH_SLOT);
     }
 
     function _setTickUpper(int24 _tick) internal {

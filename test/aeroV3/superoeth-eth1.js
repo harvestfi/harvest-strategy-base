@@ -9,9 +9,9 @@ const addresses = require("../test-config.js");
 const BigNumber = require("bignumber.js");
 
 //const Strategy = artifacts.require("");
-const Strategy = artifacts.require("AerodromeCLStrategyMainnet_USDp_USDC1");
+const Strategy = artifacts.require("AerodromeCLStrategyMainnet_superOETH_ETH1");
 
-// Developed and tested at blockNumber 23000655
+// Developed and tested at blockNumber 23003360
 
 // Vanilla Mocha test. Increased compatibility with tools that integrate Mocha.
 describe("CL test", function() {
@@ -19,8 +19,10 @@ describe("CL test", function() {
 
   // external setup
   let underlyingWhale = "0x6a74649aCFD7822ae8Fb78463a9f2192752E5Aa2";
-  let posId = 3176794
+  let posId = 3180496
   let posManager = "0x827922686190790b37229fd06084350E74485b72";
+  let aero = "0x940181a94A35A4569E4529A3CDfB74e38FD98631"
+  let superoeth = "0xDBFeFD2e8460a6Ee4955A68582F85708BAEA60A3"
 
   // parties in the protocol
   let governance;
@@ -47,13 +49,34 @@ describe("CL test", function() {
       "CLVault": true,
       "CLSetup": {
         posId: posId,
-        posManager: posManager
+        posManager: posManager,
+        targetWidth: 1,
       },
       "existingVaultAddress": null,
       "strategyArtifact": Strategy,
       "strategyArtifactIsUpgradable": true,
       "governance": governance,
+      "liquidation": [
+        {"aerodrome": [aero, superoeth]},
+      ]
     });
+
+    let sqrtPrice = new BigNumber(await vault.getSqrtPriceX96())
+    let tick = new BigNumber(await vault.getCurrentTick())
+    let inRange = await vault.inRange()
+    let amounts = await vault.getCurrentTokenAmounts()
+    let weights = await vault.getCurrentTokenWeights()
+
+    let valueIn0 = new BigNumber(await vault.getPositionValueIn0())
+    let valueIn1 = new BigNumber(await vault.getPositionValueIn1())
+    console.log(sqrtPrice.toFixed())
+    console.log(tick.toFixed())
+    console.log(inRange)
+    console.log(new BigNumber(amounts[0]).toFixed(), new BigNumber(amounts[1]).toFixed())
+    console.log(new BigNumber(weights[0]).toFixed(), new BigNumber(weights[1]).toFixed())
+
+    console.log(valueIn0.toFixed())
+    console.log(valueIn1.toFixed())
   });
 
   describe("Happy path", function() {
