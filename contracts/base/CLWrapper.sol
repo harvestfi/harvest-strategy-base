@@ -190,7 +190,7 @@ contract CLWrapper is Controllable, ReentrancyGuard, IERC4626 {
         IERC20(token1).safeApprove(_vault, 0);
         IERC20(token1).safeApprove(_vault, amount1);
 
-        uint256 amountOut = ICLVault(_vault).depositFor(amount0, amount1, _minOut, _receiver);
+        uint256 amountOut = ICLVault(_vault).deposit(amount0, amount1, _minOut, _receiver);
 
         uint256 left0 = IERC20(token0).balanceOf(address(this));
         uint256 left1 = IERC20(token1).balanceOf(address(this));

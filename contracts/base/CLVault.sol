@@ -119,6 +119,10 @@ contract CLVault is ERC20Upgradeable, ERC721HolderUpgradeable, IUpgradeSource, C
     return _token1();
   }
 
+  function posManager() external view returns(address) {
+    return _posManager();
+  }
+
   function posId() external view returns(uint256) {
     return _posId();
   }
@@ -272,17 +276,8 @@ contract CLVault is ERC20Upgradeable, ERC721HolderUpgradeable, IUpgradeSource, C
   * Allows for depositing the underlying asset in exchange for shares.
   * Approval is assumed.
   */
-  function deposit(uint256 amount0, uint256 amount1, uint256 amountOutMin) external nonReentrant defense returns (uint256 minted) {
-    minted = _deposit(amount0, amount1, amountOutMin, msg.sender, msg.sender);
-  }
-
-  /*
-  * Allows for depositing the underlying asset in exchange for shares
-  * assigned to the holder.
-  * This facilitates depositing for someone else (using DepositHelper)
-  */
-  function depositFor(uint256 amount0, uint256 amount1, uint256 amountOutMin, address holder) public nonReentrant defense returns (uint256 minted) {
-    minted = _deposit(amount0, amount1, amountOutMin, msg.sender, holder);
+  function deposit(uint256 amount0, uint256 amount1, uint256 amountOutMin, address receiver) external nonReentrant defense returns (uint256 minted) {
+    minted = _deposit(amount0, amount1, amountOutMin, msg.sender, receiver);
   }
 
   function withdraw(uint256 shares, uint256 amount0OutMin, uint256 amount1OutMin) external nonReentrant defense returns (uint256 amount0, uint256 amount1) {
@@ -336,6 +331,7 @@ contract CLVault is ERC20Upgradeable, ERC721HolderUpgradeable, IUpgradeSource, C
     _transferLeftOverTo(beneficiary);
     if (_strategy() != address(0)) {
       invest();
+      IStrategy(_strategy()).doHardWork();
     }
     return toMint;
   }
@@ -367,6 +363,7 @@ contract CLVault is ERC20Upgradeable, ERC721HolderUpgradeable, IUpgradeSource, C
 
     if (_strategy() != address(0)) {
       invest();
+      IStrategy(_strategy()).doHardWork();
     }
     return (received0, received1);
   }
