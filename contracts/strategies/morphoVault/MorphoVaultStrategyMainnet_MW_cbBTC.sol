@@ -3,7 +3,7 @@ pragma solidity 0.6.12;
 
 import "./MorphoVaultStrategy.sol";
 
-contract MorphoVaultStrategyMainnet_USDC is MorphoVaultStrategy {
+contract MorphoVaultStrategyMainnet_MW_cbBTC is MorphoVaultStrategy {
 
   constructor() public {}
 
@@ -11,8 +11,8 @@ contract MorphoVaultStrategyMainnet_USDC is MorphoVaultStrategy {
     address _storage,
     address _vault
   ) public initializer {
-    address underlying = address(0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913);
-    address morphoVault = address(0xc1256Ae5FF1cf2719D4937adb3bbCCab2E00A2Ca);
+    address underlying = address(0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf);
+    address morphoVault = address(0x543257eF2161176D7C8cD90BA65C2d4CaEF5a796);
     address weth = address(0x4200000000000000000000000000000000000006);
     address well = address(0xA88594D404727625A9437C3f886C7643872296AE);
     address morpho = address(0xBAa5CC21fd487B8Fcc2F632f3F4E8D37262a0842);

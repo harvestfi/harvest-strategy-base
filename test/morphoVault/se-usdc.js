@@ -12,12 +12,12 @@ const BigNumber = require("bignumber.js");
 const IERC20 = artifacts.require("IERC20");
 
 //const Strategy = artifacts.require("");
-const Strategy = artifacts.require("MorphoVaultStrategyMainnet_USDC");
+const Strategy = artifacts.require("MorphoVaultStrategyMainnet_SE_USDC");
 
-// Developed and tested at blockNumber 25008000
+// Developed and tested at blockNumber 25680875
 
 // Vanilla Mocha test. Increased compatibility with tools that integrate Mocha.
-describe("Base Mainnet Morpho Vault USDC", function() {
+describe("Base Mainnet Morpho Vault Seamless USDC", function() {
   let accounts;
 
   // external contracts
@@ -26,12 +26,12 @@ describe("Base Mainnet Morpho Vault USDC", function() {
   // external setup
   let underlyingWhale = "0xdaD4fF0c1e4eF0bC85E7506271380cC4eb04c1CC";
   let morphoWhale = "0xbC5a4A09450B4106bE9a4DF3d85dA3F4617e819F";
-  let wellWhale = "0x69F1B0637AcDb06aCD0C9A013b5e6457528987b0";
+  let seamWhale = "0xdd016869B1F5B774d1E2B09a3fB80880F1232864";
   let morpho = "0xBAa5CC21fd487B8Fcc2F632f3F4E8D37262a0842";
-  let well = "0xA88594D404727625A9437C3f886C7643872296AE";
+  let seam = "0x1C7a460413dD4e964f96D8dFC56E7223cE88CD85";
   let weth = "0x4200000000000000000000000000000000000006";
   let morphoToken;
-  let wellToken;
+  let seamToken;
 
   // parties in the protocol
   let governance;
@@ -49,14 +49,14 @@ describe("Base Mainnet Morpho Vault USDC", function() {
     underlying = await IERC20.at("0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913");
     console.log("Fetching Underlying at: ", underlying.address);
     morphoToken = await IERC20.at(morpho);
-    wellToken = await IERC20.at(well);
+    seamToken = await IERC20.at(seam);
   }
 
   async function setupBalance(){
     let etherGiver = accounts[9];
     await web3.eth.sendTransaction({ from: etherGiver, to: underlyingWhale, value: 10e18});
     await web3.eth.sendTransaction({ from: etherGiver, to: morphoWhale, value: 10e18});
-    await web3.eth.sendTransaction({ from: etherGiver, to: wellWhale, value: 10e18});
+    await web3.eth.sendTransaction({ from: etherGiver, to: seamWhale, value: 10e18});
 
     farmerBalance = await underlying.balanceOf(underlyingWhale);
     await underlying.transfer(farmer1, farmerBalance, { from: underlyingWhale });
@@ -69,7 +69,7 @@ describe("Base Mainnet Morpho Vault USDC", function() {
     farmer1 = accounts[1];
 
     // impersonate accounts
-    await impersonates([governance, underlyingWhale, morphoWhale, wellWhale]);
+    await impersonates([governance, underlyingWhale, morphoWhale, seamWhale]);
 
     let etherGiver = accounts[9];
     await web3.eth.sendTransaction({ from: etherGiver, to: governance, value: 10e18});
@@ -81,12 +81,12 @@ describe("Base Mainnet Morpho Vault USDC", function() {
       "strategyArtifactIsUpgradable": true,
       "underlying": underlying,
       "governance": governance,
-      "liquidation": [
-        {"uniV3": [morpho, weth]},
-      ],
-      "uniV3Fee": [
-        [morpho, weth, 3000],
-      ]
+      // "liquidation": [
+      //   {"uniV3": [morpho, weth]},
+      // ],
+      // "uniV3Fee": [
+      //   [morpho, weth, 3000],
+      // ]
     });
 
     // whale send underlying to farmers
@@ -108,7 +108,7 @@ describe("Base Mainnet Morpho Vault USDC", function() {
         
         if (i == 1) {
           await morphoToken.transfer(strategy.address, new BigNumber(1e20), {from: morphoWhale});
-          await wellToken.transfer(strategy.address, new BigNumber(1e22), {from: wellWhale});
+          await seamToken.transfer(strategy.address, new BigNumber(5e20), {from: seamWhale});
         }
 
         oldSharePrice = new BigNumber(await vault.getPricePerFullShare());

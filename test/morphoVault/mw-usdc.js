@@ -12,24 +12,23 @@ const BigNumber = require("bignumber.js");
 const IERC20 = artifacts.require("IERC20");
 
 //const Strategy = artifacts.require("");
-const Strategy = artifacts.require("MorphoVaultStrategyMainnet_ETH");
+const Strategy = artifacts.require("MorphoVaultStrategyMainnet_MW_USDC");
 
 // Developed and tested at blockNumber 25008000
 
 // Vanilla Mocha test. Increased compatibility with tools that integrate Mocha.
-describe("Base Mainnet Morpho Vault ETH", function() {
+describe("Base Mainnet Morpho Vault USDC", function() {
   let accounts;
 
   // external contracts
   let underlying;
 
   // external setup
-  let underlyingWhale = "0x297B939e9f88232Be3dD165Ea20A846440C1dc7b";
+  let underlyingWhale = "0xdaD4fF0c1e4eF0bC85E7506271380cC4eb04c1CC";
   let morphoWhale = "0xbC5a4A09450B4106bE9a4DF3d85dA3F4617e819F";
   let wellWhale = "0x69F1B0637AcDb06aCD0C9A013b5e6457528987b0";
   let morpho = "0xBAa5CC21fd487B8Fcc2F632f3F4E8D37262a0842";
   let well = "0xA88594D404727625A9437C3f886C7643872296AE";
-  let usdc = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
   let weth = "0x4200000000000000000000000000000000000006";
   let morphoToken;
   let wellToken;
@@ -47,7 +46,7 @@ describe("Base Mainnet Morpho Vault ETH", function() {
   let strategy;
 
   async function setupExternalContracts() {
-    underlying = await IERC20.at("0x4200000000000000000000000000000000000006");
+    underlying = await IERC20.at("0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913");
     console.log("Fetching Underlying at: ", underlying.address);
     morphoToken = await IERC20.at(morpho);
     wellToken = await IERC20.at(well);
@@ -83,7 +82,7 @@ describe("Base Mainnet Morpho Vault ETH", function() {
       "underlying": underlying,
       "governance": governance,
       "liquidation": [
-        {"uniV3": [morpho, weth, usdc]},
+        {"uniV3": [morpho, weth]},
       ],
       "uniV3Fee": [
         [morpho, weth, 3000],
