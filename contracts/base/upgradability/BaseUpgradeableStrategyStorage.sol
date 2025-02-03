@@ -37,6 +37,8 @@ contract BaseUpgradeableStrategyStorage is ControllableInit {
       uint256 feeAmount,
       uint256 timestamp
   );
+  event ToggledEmergencyState(bool paused);
+  event RewardTokenAdded(address token);
 
   bytes32 internal constant _UNDERLYING_SLOT = 0xa1709211eeccf8f4ad5b6700d52a1a9525b5f5ae1e9e5f9e5a0c2fc23c86e530;
   bytes32 internal constant _VAULT_SLOT = 0xefd7c7d9ef1040fc87e7ad11fe15f86e1d11e1df03c6d7c87f7e1f4041f08d41;

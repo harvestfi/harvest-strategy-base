@@ -20,6 +20,8 @@ contract AerodromeStableStrategy is BaseUpgradeableStrategy {
   using SafeMath for uint256;
   using SafeERC20 for IERC20;
 
+  event GaugeChanged(address oldGauge, address newGauge);
+
   address public constant aeroRouter = address(0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43);
   address public constant harvestMSIG = address(0x97b3e5712CDE7Db13e939a188C8CA90Db5B05131);
 
@@ -119,6 +121,7 @@ contract AerodromeStableStrategy is BaseUpgradeableStrategy {
   function emergencyExit() public onlyGovernance {
     _emergencyExitRewardPool();
     _setPausedInvesting(true);
+    emit ToggledEmergencyState(true);
   }
 
   /**
@@ -126,6 +129,7 @@ contract AerodromeStableStrategy is BaseUpgradeableStrategy {
    */
   function continueInvesting() public onlyGovernance {
     _setPausedInvesting(false);
+    emit ToggledEmergencyState(false);
   }
 
   /**
@@ -143,6 +147,7 @@ contract AerodromeStableStrategy is BaseUpgradeableStrategy {
    */
   function addRewardToken(address _token) public onlyGovernance {
     rewardTokens.push(_token);
+    emit RewardTokenAdded(_token);
   }
 
   /**
@@ -317,8 +322,10 @@ contract AerodromeStableStrategy is BaseUpgradeableStrategy {
     address _lpt = IGauge(_newGauge).stakingToken();
     require(_lpt == underlying(), "Underlying mismatch");
 
+    address oldGauge = rewardPool();
     _setRewardPool(_newGauge);
     _investAllUnderlying();
+    emit GaugeChanged(oldGauge, _newGauge);
   }
 
   /**

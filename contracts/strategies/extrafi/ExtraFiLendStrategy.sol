@@ -184,6 +184,7 @@ contract ExtraFiLendStrategy is BaseUpgradeableStrategy {
     _accrueFee();
     _redeemAll();
     _setPausedInvesting(true);
+    emit ToggledEmergencyState(true);
     _updateStoredBalance();
   }
 
@@ -192,6 +193,7 @@ contract ExtraFiLendStrategy is BaseUpgradeableStrategy {
    */
   function continueInvesting() public onlyGovernance {
     _setPausedInvesting(false);
+    emit ToggledEmergencyState(false);
   }
 
   /**
@@ -251,6 +253,7 @@ contract ExtraFiLendStrategy is BaseUpgradeableStrategy {
    */
   function addRewardToken(address _token) public onlyGovernance {
     rewardTokens.push(_token);
+    emit RewardTokenAdded(_token);
   }
 
   /**

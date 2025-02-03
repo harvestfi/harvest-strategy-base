@@ -21,6 +21,10 @@ contract MoonwellFoldStrategyV2 is BaseUpgradeableStrategy {
   using SafeMath for uint256;
   using SafeERC20 for IERC20;
 
+  event CollateralFactorNumeratorChanged(uint256 oldNumerator, uint256 newNumerator);
+  event BorrowFactorNumeratorChanged(uint256 oldNumerator, uint256 newNumerator);
+  event FoldToggled(bool fold);
+
   address public constant weth = address(0x4200000000000000000000000000000000000006);
   address public constant bVault = address(0xBA12222222228d8Ba445958a75a0704d566BF2C8);
   address public constant harvestMSIG = address(0x97b3e5712CDE7Db13e939a188C8CA90Db5B05131);
@@ -250,6 +254,7 @@ contract MoonwellFoldStrategyV2 is BaseUpgradeableStrategy {
   */
   function addRewardToken(address _token) public onlyGovernance {
     rewardTokens.push(_token);
+    emit RewardTokenAdded(_token);
   }
 
   /**
@@ -612,7 +617,9 @@ contract MoonwellFoldStrategyV2 is BaseUpgradeableStrategy {
   function _setCollateralFactorNumerator(uint256 _numerator) public onlyGovernance {
     require(_numerator <= factorDenominator(), "Collateral factor cannot be this high");
     require(_numerator > borrowTargetFactorNumerator(), "Collateral factor should be higher than borrow target");
+    uint256 oldNumerator = collateralFactorNumerator();
     setUint256(_COLLATERALFACTORNUMERATOR_SLOT, _numerator);
+    emit CollateralFactorNumeratorChanged(oldNumerator, _numerator);
   }
 
   /**
@@ -647,7 +654,9 @@ contract MoonwellFoldStrategyV2 is BaseUpgradeableStrategy {
   */
   function setBorrowTargetFactorNumerator(uint256 _numerator) public onlyGovernance {
     require(_numerator < collateralFactorNumerator(), "Target should be lower than collateral limit");
+    uint256 oldNumerator = collateralFactorNumerator();
     setUint256(_BORROWTARGETFACTORNUMERATOR_SLOT, _numerator);
+    emit BorrowFactorNumeratorChanged(oldNumerator, _numerator);
   }
 
   /**
@@ -665,6 +674,7 @@ contract MoonwellFoldStrategyV2 is BaseUpgradeableStrategy {
   */
   function setFold (bool _fold) public onlyGovernance {
     setBoolean(_FOLD_SLOT, _fold);
+    emit FoldToggled(_fold);
   }
 
   /**

@@ -112,6 +112,7 @@ contract CompoundStrategy is BaseUpgradeableStrategy {
   function emergencyExit() public onlyGovernance {
     _emergencyExitRewardPool();
     _setPausedInvesting(true);
+    emit ToggledEmergencyState(true);
   }
 
   /**
@@ -119,6 +120,7 @@ contract CompoundStrategy is BaseUpgradeableStrategy {
    */
   function continueInvesting() public onlyGovernance {
     _setPausedInvesting(false);
+    emit ToggledEmergencyState(false);
   }
 
   /**

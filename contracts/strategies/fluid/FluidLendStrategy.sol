@@ -173,6 +173,7 @@ contract FluidLendStrategy is BaseUpgradeableStrategy {
     _accrueFee();
     _redeemAll();
     _setPausedInvesting(true);
+    emit ToggledEmergencyState(true);
     _updateStoredBalance();
   }
 
@@ -181,6 +182,7 @@ contract FluidLendStrategy is BaseUpgradeableStrategy {
    */
   function continueInvesting() public onlyGovernance {
     _setPausedInvesting(false);
+    emit ToggledEmergencyState(false);
   }
 
   /**
@@ -231,6 +233,7 @@ contract FluidLendStrategy is BaseUpgradeableStrategy {
    */
   function addRewardToken(address _token) public onlyGovernance {
     rewardTokens.push(_token);
+    emit RewardTokenAdded(_token);
   }
 
   /**
