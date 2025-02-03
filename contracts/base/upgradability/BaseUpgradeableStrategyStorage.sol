@@ -287,4 +287,6 @@ contract BaseUpgradeableStrategyStorage is ControllableInit {
     str := sload(slot)
     }
   }
+
+  uint256[50] private ______gap;
 }

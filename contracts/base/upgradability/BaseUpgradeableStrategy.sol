@@ -129,34 +129,36 @@ contract BaseUpgradeableStrategy is Initializable, ControllableInit, BaseUpgrade
       address _rewardToken,
       uint256 _rewardBalance
   ) internal {
-      if (_rewardBalance > 10) {
-          uint256 _feeDenominator = feeDenominator();
-          uint256 strategistFee = _rewardBalance.mul(strategistFeeNumerator()).div(_feeDenominator);
-          uint256 platformFee = _rewardBalance.mul(platformFeeNumerator()).div(_feeDenominator);
-          uint256 profitSharingFee = _rewardBalance.mul(profitSharingNumerator()).div(_feeDenominator);
+    if (_rewardBalance > 10) {
+      uint256 _feeDenominator = feeDenominator();
+      uint256 strategistFee = _rewardBalance.mul(strategistFeeNumerator()).div(_feeDenominator);
+      uint256 platformFee = _rewardBalance.mul(platformFeeNumerator()).div(_feeDenominator);
+      uint256 profitSharingFee = _rewardBalance.mul(profitSharingNumerator()).div(_feeDenominator);
 
-          address strategyFeeRecipient = strategist();
-          address platformFeeRecipient = IController(controller()).governance();
+      address strategyFeeRecipient = strategist();
+      address platformFeeRecipient = IController(controller()).governance();
 
-          emit ProfitLogInReward(_rewardToken, _rewardBalance, profitSharingFee, block.timestamp);
-          emit PlatformFeeLogInReward(platformFeeRecipient, _rewardToken, _rewardBalance, platformFee, block.timestamp);
-          emit StrategistFeeLogInReward(strategyFeeRecipient, _rewardToken, _rewardBalance, strategistFee, block.timestamp);
+      emit ProfitLogInReward(_rewardToken, _rewardBalance, profitSharingFee, block.timestamp);
+      emit PlatformFeeLogInReward(platformFeeRecipient, _rewardToken, _rewardBalance, platformFee, block.timestamp);
+      emit StrategistFeeLogInReward(strategyFeeRecipient, _rewardToken, _rewardBalance, strategistFee, block.timestamp);
 
-          address rewardForwarder = IController(controller()).rewardForwarder();
-          IERC20(_rewardToken).safeApprove(rewardForwarder, 0);
-          IERC20(_rewardToken).safeApprove(rewardForwarder, _rewardBalance);
+      address rewardForwarder = IController(controller()).rewardForwarder();
+      IERC20(_rewardToken).safeApprove(rewardForwarder, 0);
+      IERC20(_rewardToken).safeApprove(rewardForwarder, _rewardBalance);
 
-          // Distribute/send the fees
-          IRewardForwarder(rewardForwarder).notifyFee(
-              _rewardToken,
-              profitSharingFee,
-              strategistFee,
-              platformFee
-          );
-      } else {
-          emit ProfitLogInReward(_rewardToken, 0, 0, block.timestamp);
-          emit PlatformFeeLogInReward(IController(controller()).governance(), _rewardToken, 0, 0, block.timestamp);
-          emit StrategistFeeLogInReward(strategist(), _rewardToken, 0, 0, block.timestamp);
-      }
+      // Distribute/send the fees
+      IRewardForwarder(rewardForwarder).notifyFee(
+        _rewardToken,
+        profitSharingFee,
+        strategistFee,
+        platformFee
+      );
+    } else {
+      emit ProfitLogInReward(_rewardToken, 0, 0, block.timestamp);
+      emit PlatformFeeLogInReward(IController(controller()).governance(), _rewardToken, 0, 0, block.timestamp);
+      emit StrategistFeeLogInReward(strategist(), _rewardToken, 0, 0, block.timestamp);
+    }
   }
+
+  uint256[50] private ______gap;
 }
