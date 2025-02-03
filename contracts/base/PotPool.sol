@@ -303,7 +303,7 @@ contract PotPool is IRewardDistributionRecipient, Controllable, ERC20, Reentranc
      * @notice Pushes rewards to the specified recipient.
      * @param recipient Address to push rewards to.
      */
-    function pushAllRewards(address recipient) external updateRewards(recipient) onlyGovernance {
+    function pushAllRewards(address recipient) external nonReentrant updateRewards(recipient) onlyGovernance {
       bool rewardPayout = (!smartContractStakers[recipient] || !IController(controller()).greyList(recipient));
       for(uint256 i = 0 ; i < rewardTokens.length; i++ ){
         uint256 reward = earned(rewardTokens[i], recipient);
