@@ -262,7 +262,7 @@ contract PotPool is IRewardDistributionRecipient, Controllable, ERC20, Reentranc
         return
             stakedBalanceOf[account]
                 .mul(rewardPerToken(rt).sub(userRewardPerTokenPaidForToken[rt][account]))
-                .div(10**uint256(ERC20(rt).decimals()))
+                .div(10**uint256(decimals()))
                 .add(rewardsForToken[rt][account]);
     }
 
