@@ -463,4 +463,6 @@ contract VaultV1 is ERC20Upgradeable, IUpgradeSource, ControllableInit, VaultSto
     _setNextImplementation(address(0));
     _setNextImplementationTimestamp(0);
   }
+
+  uint256[50] private ______gap;
 }
