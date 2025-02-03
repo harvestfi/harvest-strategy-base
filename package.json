@@ -19,18 +19,18 @@
   },
   "homepage": "https://github.com/harvestfi/harvest-strategy-base#readme",
   "devDependencies": {
-    "@nomiclabs/hardhat-ethers": "2.2.1",
-    "@nomiclabs/hardhat-etherscan": "^3.1.2",
-    "@nomiclabs/hardhat-waffle": "2.0.3",
+    "@nomiclabs/hardhat-ethers": "2.2.3",
+    "@nomiclabs/hardhat-etherscan": "3.1.7",
+    "@nomiclabs/hardhat-waffle": "2.0.6",
     "@openzeppelin/test-helpers": "0.5.16",
     "dotenv": "^16.4.5",
-    "hardhat": "^2.13.1"
+    "hardhat": "2.22.17"
   },
   "dependencies": {
     "@nomiclabs/hardhat-truffle5": "2.0.7",
     "@nomiclabs/hardhat-web3": "2.0.0",
-    "@openzeppelin/contracts": "3.4.2",
-    "@openzeppelin/contracts-upgradeable": "3.4.2",
+    "@openzeppelin/contracts": "4.9.6",
+    "@openzeppelin/contracts-upgradeable": "4.3.3",
     "@openzeppelin/upgrades": "^2.8.0",
     "hardhat-contract-sizer": "^2.10.0",
     "prompt": "1.3.0"

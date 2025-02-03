@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: Unlicense
-pragma solidity 0.6.12;
+pragma solidity 0.8.26;
 
-import "@openzeppelin/contracts/math/Math.sol";
-import "@openzeppelin/contracts/math/SafeMath.sol";
-import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
+import "@openzeppelin/contracts/utils/math/Math.sol";
+import "@openzeppelin/contracts/utils/math/SafeMath.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "../../base/interface/IUniversalLiquidator.sol";
 import "../../base/upgradability/BaseUpgradeableStrategy.sol";
 import "../../base/interface/moonwell/MTokenInterfaces.sol";
@@ -44,7 +44,7 @@ contract MoonwellFoldStrategyV2 is BaseUpgradeableStrategy {
   /**
    * @notice Initializes the strategy and verifies that storage slots are correctly configured.
    */
-  constructor() public BaseUpgradeableStrategy() {
+  constructor() BaseUpgradeableStrategy() {
     assert(_MTOKEN_SLOT == bytes32(uint256(keccak256("eip1967.strategyStorage.mToken")) - 1));
     assert(_COLLATERALFACTORNUMERATOR_SLOT == bytes32(uint256(keccak256("eip1967.strategyStorage.collateralFactorNumerator")) - 1));
     assert(_FACTORDENOMINATOR_SLOT == bytes32(uint256(keccak256("eip1967.strategyStorage.factorDenominator")) - 1));
@@ -456,10 +456,10 @@ contract MoonwellFoldStrategyV2 is BaseUpgradeableStrategy {
   /**
   * @notice Redeems a specified amount using flashloan support.
   * @param amount The amount to redeem from the underlying assets.
-  * @param borrowTargetFactorNumerator The borrow target factor for calculations.
+  * @param _borrowTargetFactorNumerator The borrow target factor for calculations.
   * @dev Uses flashloan if the calculated borrow difference is greater than Balancer's balance.
   */
-  function _redeemWithFlashloan(uint256 amount, uint256 borrowTargetFactorNumerator) internal {
+  function _redeemWithFlashloan(uint256 amount, uint256 _borrowTargetFactorNumerator) internal {
     address _mToken = mToken();
     uint256 supplied = MTokenInterface(_mToken).balanceOfUnderlying(address(this));
     uint256 borrowed = MTokenInterface(_mToken).borrowBalanceCurrent(address(this));
@@ -467,7 +467,7 @@ contract MoonwellFoldStrategyV2 is BaseUpgradeableStrategy {
     {
         uint256 oldBalance = supplied.sub(borrowed);
         uint256 newBalance = oldBalance.sub(amount);
-        newBorrowTarget = newBalance.mul(borrowTargetFactorNumerator).div(factorDenominator().sub(borrowTargetFactorNumerator));
+        newBorrowTarget = newBalance.mul(_borrowTargetFactorNumerator).div(factorDenominator().sub(_borrowTargetFactorNumerator));
     }
     uint256 borrowDiff;
     if (borrowed < newBorrowTarget) {
@@ -479,7 +479,7 @@ contract MoonwellFoldStrategyV2 is BaseUpgradeableStrategy {
     uint256 balancerBalance = IERC20(_underlying).balanceOf(bVault);
 
     if (borrowDiff > balancerBalance) {
-      _redeemNoFlash(amount, supplied, borrowed, _mToken, factorDenominator(), borrowTargetFactorNumerator);
+      _redeemNoFlash(amount, supplied, borrowed, _mToken, factorDenominator(), _borrowTargetFactorNumerator);
     } else {
       address[] memory tokens = new address[](1);
       uint256[] memory amounts = new uint256[](1);
@@ -591,8 +591,8 @@ contract MoonwellFoldStrategyV2 is BaseUpgradeableStrategy {
       uint256 toRepay = borrowed.sub(newBorrowTarget);
       uint256 toRedeem = Math.min(supplied.sub(requiredCollateral), amount.add(toRepay));
       _redeem(toRedeem);
-      uint256 underlyingBalance = IERC20(_underlying).balanceOf(address(this));
-      _repay(Math.min(toRepay, underlyingBalance));
+      uint256 _underlyingBalance = IERC20(_underlying).balanceOf(address(this));
+      _repay(Math.min(toRepay, _underlyingBalance));
       borrowed = MTokenInterface(_mToken).borrowBalanceCurrent(address(this));
       supplied = MTokenInterface(_mToken).balanceOfUnderlying(address(this));
     }

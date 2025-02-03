@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Unlicense
-pragma solidity 0.6.12;
+pragma solidity 0.8.26;
 
 import "./interface/IERC4626.sol";
 import "./VaultV1.sol";
@@ -49,10 +49,10 @@ contract VaultV2 is IERC4626, VaultV1 {
 
     /**
      * @notice Returns the maximum amount of assets that can be deposited by the caller.
-     * @return Maximum deposit limit as `uint(-1)` (no limit).
+     * @return Maximum deposit limit as `type(uint256).max` (no limit).
      */
-    function maxDeposit(address /*caller*/) public view override returns (uint256) {
-        return uint(-1);
+    function maxDeposit(address /*caller*/) public pure override returns (uint256) {
+        return type(uint256).max;
     }
 
     /**
@@ -77,10 +77,10 @@ contract VaultV2 is IERC4626, VaultV1 {
 
     /**
      * @notice Returns the maximum amount of shares that can be minted by the caller.
-     * @return Maximum mint limit as `uint(-1)` (no limit).
+     * @return Maximum mint limit as `type(uint256).max` (no limit).
      */
-    function maxMint(address /*caller*/) public view override returns (uint256) {
-        return uint(-1);
+    function maxMint(address /*caller*/) public pure override returns (uint256) {
+        return type(uint256).max;
     }
 
     /**
@@ -182,8 +182,8 @@ contract VaultV2 is IERC4626, VaultV1 {
      */
     function convertToAssets(uint256 _shares) public view returns (uint256) {
         return totalAssets() == 0 || totalSupply() == 0
-            ? _shares.mul(TEN ** ERC20Upgradeable(underlying()).decimals()).div(TEN ** decimals())
-            : _shares.mul(totalAssets()).div(totalSupply());
+            ? _shares * (TEN ** ERC20Upgradeable(underlying()).decimals()) / (TEN ** decimals())
+            : _shares * totalAssets() / totalSupply();
     }
 
     /**
@@ -193,7 +193,7 @@ contract VaultV2 is IERC4626, VaultV1 {
      */
     function convertToShares(uint256 _assets) public view returns (uint256) {
         return totalAssets() == 0 || totalSupply() == 0
-            ? _assets.mul(TEN ** decimals()).div(TEN ** ERC20Upgradeable(underlying()).decimals())
-            : _assets.mul(totalSupply()).div(totalAssets());
+            ? _assets * (TEN ** decimals()) / (TEN ** ERC20Upgradeable(underlying()).decimals())
+            : _assets * totalSupply() / totalAssets();
     }
 }

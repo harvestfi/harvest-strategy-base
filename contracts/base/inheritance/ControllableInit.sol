@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Unlicense
-pragma solidity 0.6.12;
+pragma solidity 0.8.26;
 
 import "./GovernableInit.sol";
 
@@ -14,7 +14,7 @@ contract ControllableInit is GovernableInit {
   /**
    * @dev Empty constructor. Initialization logic is handled by the `initialize` function.
    */
-  constructor() public {}
+  constructor() {}
 
   /**
    * @notice Initializes the contract with the storage address.

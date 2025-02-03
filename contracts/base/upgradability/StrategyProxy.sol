@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Unlicense
-pragma solidity 0.6.12;
+pragma solidity 0.8.26;
 
 import "../interface/IUpgradeSource.sol";
 import "./BaseUpgradeabilityProxy.sol";
@@ -15,7 +15,7 @@ contract StrategyProxy is BaseUpgradeabilityProxy {
    * @dev Initializes the proxy with an implementation address.
    * @param _implementation The address of the initial implementation contract.
    */
-  constructor(address _implementation) public {
+  constructor(address _implementation) {
     _setImplementation(_implementation);
   }
 

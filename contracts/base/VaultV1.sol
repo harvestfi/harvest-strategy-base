@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: Unlicense
-pragma solidity 0.6.12;
+pragma solidity 0.8.26;
 
-import "@openzeppelin/contracts-upgradeable/math/MathUpgradeable.sol";
-import "@openzeppelin/contracts-upgradeable/math/SafeMathUpgradeable.sol";
-import "@openzeppelin/contracts-upgradeable/token/ERC20/SafeERC20Upgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/utils/math/MathUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/utils/math/SafeMathUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/token/ERC20/utils/SafeERC20Upgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/token/ERC20/IERC20Upgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/utils/AddressUpgradeable.sol";
@@ -13,6 +13,7 @@ import "./interface/IController.sol";
 import "./interface/IUpgradeSource.sol";
 import "./inheritance/ControllableInit.sol";
 import "./VaultStorage.sol";
+import "./interface/IERC4626.sol";
 
 /**
  * @title VaultV1
@@ -25,13 +26,11 @@ contract VaultV1 is ERC20Upgradeable, IUpgradeSource, ControllableInit, VaultSto
   using AddressUpgradeable for address;
   using SafeMathUpgradeable for uint256;
 
-  event Deposit(address indexed sender, address indexed receiver, uint256 assets, uint256 shares);
-  event Withdraw(address indexed sender, address indexed receiver, address indexed owner, uint256 assets, uint256 shares);
   event Invest(uint256 amount);
   event StrategyAnnounced(address newStrategy, uint256 time);
   event StrategyChanged(address newStrategy, address oldStrategy);
 
-  constructor() public {}
+  constructor() {}
 
   /**
    * @notice Initializes the vault with the specified underlying asset and investment parameters.
@@ -53,17 +52,21 @@ contract VaultV1 is ERC20Upgradeable, IUpgradeSource, ControllableInit, VaultSto
       string(abi.encodePacked("FARM_", ERC20Upgradeable(_underlying).symbol())),
       string(abi.encodePacked("f", ERC20Upgradeable(_underlying).symbol()))
     );
-    _setupDecimals(ERC20Upgradeable(_underlying).decimals());
+    _setDecimals(ERC20Upgradeable(_underlying).decimals());
 
     ControllableInit.initialize(_storage);
 
-    uint256 underlyingUnit = 10 ** uint256(ERC20Upgradeable(address(_underlying)).decimals());
+    uint256 _underlyingUnit = 10 ** uint256(ERC20Upgradeable(address(_underlying)).decimals());
     VaultStorage.initialize(
       _underlying,
       _toInvestNumerator,
       _toInvestDenominator,
-      underlyingUnit
+      _underlyingUnit
     );
+  }
+
+  function decimals() public view override returns(uint8) {
+    return uint8(_decimals());
   }
 
   /**
@@ -273,7 +276,7 @@ contract VaultV1 is ERC20Upgradeable, IUpgradeSource, ControllableInit, VaultSto
         IStrategy(strategy()).withdrawAllToVault();
       }
       _setStrategy(_strategy);
-      IERC20Upgradeable(underlying()).safeApprove(address(strategy()), uint256(~0));
+      IERC20Upgradeable(underlying()).safeApprove(address(strategy()), type(uint256).max);
     }
     finalizeStrategyUpdate();
   }
@@ -385,7 +388,7 @@ contract VaultV1 is ERC20Upgradeable, IUpgradeSource, ControllableInit, VaultSto
         : amount.mul(totalSupply()).div(underlyingBalanceWithInvestment().sub(amount));
     _mint(beneficiary, toMint);
 
-    emit Deposit(sender, beneficiary, amount, toMint);
+    emit IERC4626.Deposit(sender, beneficiary, amount, toMint);
     return toMint;
   }
 
@@ -404,7 +407,7 @@ contract VaultV1 is ERC20Upgradeable, IUpgradeSource, ControllableInit, VaultSto
     address sender = msg.sender;
     if (sender != owner) {
       uint256 currentAllowance = allowance(owner, sender);
-      if (currentAllowance != uint(-1)) {
+      if (currentAllowance != type(uint256).max) {
         require(currentAllowance >= numberOfShares, "ERC20: transfer amount exceeds allowance");
         _approve(owner, sender, currentAllowance - numberOfShares);
       }
@@ -427,7 +430,7 @@ contract VaultV1 is ERC20Upgradeable, IUpgradeSource, ControllableInit, VaultSto
     }
 
     IERC20Upgradeable(underlying()).safeTransfer(receiver, underlyingAmountToWithdraw);
-    emit Withdraw(sender, receiver, owner, underlyingAmountToWithdraw, numberOfShares);
+    emit IERC4626.Withdraw(sender, receiver, owner, underlyingAmountToWithdraw, numberOfShares);
     return underlyingAmountToWithdraw;
   }
 

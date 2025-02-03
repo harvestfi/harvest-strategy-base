@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Unlicense
-pragma solidity 0.6.12;
+pragma solidity 0.8.26;
 
 import "./Storage.sol";
 
@@ -19,7 +19,7 @@ contract Governable {
    * @param _store The address of the Storage contract.
    * Reverts if `_store` is the zero address.
    */
-  constructor(address _store) public {
+  constructor(address _store) {
     require(_store != address(0), "new storage shouldn't be empty");
     store = Storage(_store);
   }

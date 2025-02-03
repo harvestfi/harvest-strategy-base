@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: Unlicense
-pragma solidity 0.6.12;
+pragma solidity 0.8.26;
 
-import "@openzeppelin/contracts/math/Math.sol";
-import "@openzeppelin/contracts/math/SafeMath.sol";
-import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
+import "@openzeppelin/contracts/utils/math/Math.sol";
+import "@openzeppelin/contracts/utils/math/SafeMath.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "../../base/interface/IUniversalLiquidator.sol";
 import "../../base/upgradability/BaseUpgradeableStrategy.sol";
 import "../../base/interface/extrafi/ILendingPool.sol";
@@ -27,7 +27,7 @@ contract ExtraFiLendStrategy is BaseUpgradeableStrategy {
 
   address[] public rewardTokens;
 
-  constructor() public BaseUpgradeableStrategy() {
+  constructor() BaseUpgradeableStrategy() {
     assert(_MARKET_SLOT == bytes32(uint256(keccak256("eip1967.strategyStorage.market")) - 1));
     assert(_RESERVE_ID_SLOT == bytes32(uint256(keccak256("eip1967.strategyStorage.reserveId")) - 1));
     assert(_STORED_SUPPLIED_SLOT == bytes32(uint256(keccak256("eip1967.strategyStorage.storedSupplied")) - 1));

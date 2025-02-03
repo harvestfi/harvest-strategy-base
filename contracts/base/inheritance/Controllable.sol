@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Unlicense
-pragma solidity 0.6.12;
+pragma solidity 0.8.26;
 
 import "./Governable.sol";
 
@@ -15,7 +15,7 @@ contract Controllable is Governable {
    * @dev Initializes the contract by setting the storage address.
    * @param _storage The address of the storage contract.
    */
-  constructor(address _storage) public Governable(_storage) {}
+  constructor(address _storage) Governable(_storage) {}
 
   /**
    * @dev Modifier to restrict access to only the controller.

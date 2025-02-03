@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: Unlicense
-pragma solidity 0.6.12;
+pragma solidity 0.8.26;
 
-import "@openzeppelin/contracts/math/Math.sol";
-import "@openzeppelin/contracts/math/SafeMath.sol";
-import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
+import "@openzeppelin/contracts/utils/math/Math.sol";
+import "@openzeppelin/contracts/utils/math/SafeMath.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "../../base/interface/IUniversalLiquidator.sol";
 import "../../base/upgradability/BaseUpgradeableStrategy.sol";
@@ -25,7 +25,7 @@ contract AerodromeStableStrategy is BaseUpgradeableStrategy {
 
   address[] public rewardTokens;
 
-  constructor() public BaseUpgradeableStrategy() {}
+  constructor() BaseUpgradeableStrategy() {}
 
   /**
    * @notice Initializes the strategy with parameters and verifies gauge compatibility.
@@ -168,14 +168,14 @@ contract AerodromeStableStrategy is BaseUpgradeableStrategy {
     address _universalLiquidator = universalLiquidator();
     for(uint256 i = 0; i < rewardTokens.length; i++){
       address token = rewardTokens[i];
-      uint256 rewardBalance = IERC20(token).balanceOf(address(this));
-      if (rewardBalance == 0) {
+      uint256 balance = IERC20(token).balanceOf(address(this));
+      if (balance == 0) {
         continue;
       }
       if (token != _rewardToken){
           IERC20(token).safeApprove(_universalLiquidator, 0);
-          IERC20(token).safeApprove(_universalLiquidator, rewardBalance);
-          IUniversalLiquidator(_universalLiquidator).swap(token, _rewardToken, rewardBalance, 1, address(this));
+          IERC20(token).safeApprove(_universalLiquidator, balance);
+          IUniversalLiquidator(_universalLiquidator).swap(token, _rewardToken, balance, 1, address(this));
       }
     }
 

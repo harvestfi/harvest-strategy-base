@@ -1,17 +1,17 @@
 // SPDX-License-Identifier: Unlicense
-pragma solidity 0.6.12;
+pragma solidity 0.8.26;
 
 import "./inheritance/Controllable.sol";
 import "./interface/IController.sol";
 
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
-import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
-import "@openzeppelin/contracts/math/SafeMath.sol";
-import "@openzeppelin/contracts/math/Math.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/utils/math/SafeMath.sol";
+import "@openzeppelin/contracts/utils/math/Math.sol";
 import "@openzeppelin/contracts/utils/Address.sol";
-import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 
 abstract contract IRewardDistributionRecipient is Ownable {
 
@@ -21,7 +21,7 @@ abstract contract IRewardDistributionRecipient is Ownable {
      * @dev Initializes reward distribution with specified addresses.
      * @param _rewardDistributions Array of addresses allowed to distribute rewards.
      */
-    constructor(address[] memory _rewardDistributions) public {
+    constructor(address[] memory _rewardDistributions) {
         rewardDistribution[0x97b3e5712CDE7Db13e939a188C8CA90Db5B05131] = true;
         for(uint256 i = 0; i < _rewardDistributions.length; i++) {
           rewardDistribution[_rewardDistributions[i]] = true;
@@ -70,6 +70,8 @@ contract PotPool is IRewardDistributionRecipient, Controllable, ERC20, Reentranc
 
     /// @notice Duration over which rewards are distributed
     uint256 public duration;
+
+    uint8 private _decimals;
 
     mapping(address => uint256) public stakedBalanceOf;
 
@@ -185,7 +187,7 @@ contract PotPool is IRewardDistributionRecipient, Controllable, ERC20, Reentranc
      * @param _storage Address of the storage contract.
      * @param _name Name of the ERC20 token.
      * @param _symbol Symbol of the ERC20 token.
-     * @param _decimals Number of decimals for the ERC20 token.
+     * @param __decimals Number of decimals for the ERC20 token.
      */
     constructor(
         address[] memory _rewardTokens,
@@ -195,8 +197,8 @@ contract PotPool is IRewardDistributionRecipient, Controllable, ERC20, Reentranc
         address _storage,
         string memory _name,
         string memory _symbol,
-        uint8 _decimals
-      ) public
+        uint8 __decimals
+      )
       ERC20(_name, _symbol)
       IRewardDistributionRecipient(_rewardDistribution)
       Controllable(_storage)
@@ -204,13 +206,17 @@ contract PotPool is IRewardDistributionRecipient, Controllable, ERC20, Reentranc
     {
         require(_decimals == ERC20(_lpToken).decimals(), "decimals has to be aligned with the lpToken");
         require(_rewardTokens.length != 0, "should initialize with at least 1 rewardToken");
-        _setupDecimals(_decimals);
+        _decimals = __decimals;
         rewardTokens = _rewardTokens;
         lpToken = _lpToken;
         duration = _duration;
     }
 
-    function _transfer(address, address, uint256) internal override {
+    function decimals() public view override returns (uint8) {
+      return _decimals;
+    }
+
+    function _transfer(address, address, uint256) internal pure override {
       revert("Staked assets cannot be transferred");
     }
 
@@ -366,7 +372,7 @@ contract PotPool is IRewardDistributionRecipient, Controllable, ERC20, Reentranc
      * @param rt Address of the reward token.
      */
     function addRewardToken(address rt) external onlyGovernanceOrRewardDistribution {
-      require(getRewardTokenIndex(rt) == uint256(-1), "Reward token already exists");
+      require(getRewardTokenIndex(rt) == type(uint256).max, "Reward token already exists");
       rewardTokens.push(rt);
     }
 
@@ -376,7 +382,7 @@ contract PotPool is IRewardDistributionRecipient, Controllable, ERC20, Reentranc
      */
     function removeRewardToken(address rt) external onlyGovernanceOrRewardDistribution {
       uint256 i = getRewardTokenIndex(rt);
-      require(i != uint256(-1), "Reward token does not exists");
+      require(i != type(uint256).max, "Reward token does not exists");
       require(periodFinishForToken[rewardTokens[i]] < block.timestamp, "Can only remove when the reward period has passed");
       require(rewardTokens.length > 1, "Cannot remove the last reward token");
       uint256 lastIndex = rewardTokens.length - 1;
@@ -395,7 +401,7 @@ contract PotPool is IRewardDistributionRecipient, Controllable, ERC20, Reentranc
         if(rewardTokens[i] == rt)
           return i;
       }
-      return uint256(-1);
+      return type(uint256).max;
     }
 
     /**
@@ -408,10 +414,10 @@ contract PotPool is IRewardDistributionRecipient, Controllable, ERC20, Reentranc
         onlyRewardDistribution
         updateRewards(address(0))
     {
-        require(reward < uint(-1) / 10 ** uint256(ERC20(_rewardToken).decimals()), "the notified reward cannot invoke multiplication overflow");
+        require(reward < type(uint256).max / 10 ** uint256(ERC20(_rewardToken).decimals()), "the notified reward cannot invoke multiplication overflow");
 
         uint256 i = getRewardTokenIndex(_rewardToken);
-        require(i != uint256(-1), "rewardTokenIndex not found");
+        require(i != type(uint256).max, "rewardTokenIndex not found");
 
         if (block.timestamp >= periodFinishForToken[_rewardToken]) {
             rewardRateForToken[_rewardToken] = reward.div(duration);

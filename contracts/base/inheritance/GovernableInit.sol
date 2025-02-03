@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Unlicense
-pragma solidity 0.6.12;
+pragma solidity 0.8.26;
 
 import "../upgradability/ReentrancyGuardUpgradeable.sol";
 import "./Storage.sol";
@@ -28,7 +28,7 @@ contract GovernableInit is ReentrancyGuardUpgradeable {
    * @dev Constructor to validate the storage slot constant as per EIP-1967.
    * Ensures the storage slot matches a deterministic value for consistency across upgrades.
    */
-  constructor() public {
+  constructor() {
     assert(_STORAGE_SLOT == bytes32(uint256(keccak256("eip1967.governableInit.storage")) - 1));
   }
 

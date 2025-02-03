@@ -1,11 +1,11 @@
 //SPDX-License-Identifier: Unlicense
-pragma solidity 0.6.12;
+pragma solidity 0.8.26;
 
 import "./MoonwellFoldStrategyV2.sol";
 
 contract MoonwellFoldStrategyV2Mainnet_WETH is MoonwellFoldStrategyV2 {
 
-  constructor() public {}
+  constructor() {}
 
   function initializeStrategy(
     address _storage,

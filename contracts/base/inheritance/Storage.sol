@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Unlicense
-pragma solidity 0.6.12;
+pragma solidity 0.8.26;
 
 /**
  * @title Storage
@@ -17,7 +17,7 @@ contract Storage {
   /**
    * @dev Sets the deployer as the initial governance address.
    */
-  constructor() public {
+  constructor() {
     governance = msg.sender;
   }
 
