@@ -3,7 +3,7 @@ pragma solidity 0.6.12;
 
 import "./AerodromeVolatileStrategy.sol";
 
-contract AerodromeVolatileStrategyMainnet_ETH_USDC_V2 is AerodromeVolatileStrategy {
+contract AerodromeVolatileStrategyMainnet_aixCB_ETH is AerodromeVolatileStrategy {
 
   constructor() public {}
 
@@ -11,8 +11,8 @@ contract AerodromeVolatileStrategyMainnet_ETH_USDC_V2 is AerodromeVolatileStrate
     address _storage,
     address _vault
   ) public initializer {
-    address underlying = address(0xcDAC0d6c6C59727a65F871236188350531885C43);
-    address gauge = address(0x519BBD1Dd8C6A94C46080E24f316c14Ee758C025);
+    address underlying = address(0x19C3c7EEfb070EE00ddE367A9768De1DF52cbE5d);
+    address gauge = address(0x8D02e0814526448e6be0Faca8e00925691Cda345);
     address aero = address(0x940181a94A35A4569E4529A3CDfB74e38FD98631);
     AerodromeVolatileStrategy.initializeBaseStrategy(
       _storage,
