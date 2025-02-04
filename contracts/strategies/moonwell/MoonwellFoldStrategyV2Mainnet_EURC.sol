@@ -25,7 +25,6 @@ contract MoonwellFoldStrategyV2Mainnet_EURC is MoonwellFoldStrategyV2 {
       well,
       0,
       830,
-      1000,
       false
     );
     rewardTokens = [well];

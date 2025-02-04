@@ -22,14 +22,14 @@ contract BaseUpgradeableStrategy is Initializable, ControllableInit, BaseUpgrade
   modifier restricted() {
     require(msg.sender == vault() || msg.sender == controller()
       || msg.sender == governance(),
-      "The sender has to be the controller, governance, or vault");
+      "sender != controller, governance, or vault");
     _;
   }
 
   // This is only used in `investAllUnderlying()`
   // The user can still freely withdraw from the strategy
   modifier onlyNotPausedInvesting() {
-    require(!pausedInvesting(), "Action blocked as the strategy is in emergency state");
+    require(!pausedInvesting(), "emergency state");
     _;
   }
 
@@ -53,7 +53,6 @@ contract BaseUpgradeableStrategy is Initializable, ControllableInit, BaseUpgrade
     _setRewardToken(_rewardToken);
     _setStrategist(_strategist);
     _setSell(true);
-    _setSellFloor(0);
     _setPausedInvesting(false);
   }
 
