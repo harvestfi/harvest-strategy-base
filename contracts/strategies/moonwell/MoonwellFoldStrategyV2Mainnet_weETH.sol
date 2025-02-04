@@ -25,7 +25,6 @@ contract MoonwellFoldStrategyV2Mainnet_weETH is MoonwellFoldStrategyV2 {
       well,
       720,
       740,
-      1000,
       true
     );
     rewardTokens = [well];

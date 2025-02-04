@@ -4,7 +4,7 @@ pragma experimental ABIEncoderV2;
 
 import "./MoonwellFoldStrategyV2.sol";
 
-contract MoonwellFoldStrategyV2Mainnet_wrsETH is MoonwellFoldStrategyV2 {
+contract MoonwellFoldStrategyV2Mainnet_USDS is MoonwellFoldStrategyV2 {
 
   constructor() public {}
 
@@ -12,8 +12,8 @@ contract MoonwellFoldStrategyV2Mainnet_wrsETH is MoonwellFoldStrategyV2 {
     address _storage,
     address _vault
   ) public initializer {
-    address underlying = address(0xEDfa23602D0EC14714057867A78d01e94176BEA0);
-    address mToken = address(0xfC41B49d064Ac646015b459C522820DB9472F4B5);
+    address underlying = address(0x820C137fa70C8691f0e44Dc420a5e53c168921Dc);
+    address mToken = address(0xb6419c6C2e60c4025D6D06eE4F913ce89425a357);
     address comptroller = address(0xfBb21d0380beE3312B33c4353c8936a0F13EF26C);
     address well = address(0xA88594D404727625A9437C3f886C7643872296AE);
     MoonwellFoldStrategyV2.initializeBaseStrategy(
@@ -23,9 +23,9 @@ contract MoonwellFoldStrategyV2Mainnet_wrsETH is MoonwellFoldStrategyV2 {
       mToken,
       comptroller,
       well,
-      720,
-      740,
-      true
+      0,
+      829,
+      false
     );
     rewardTokens = [well];
   }

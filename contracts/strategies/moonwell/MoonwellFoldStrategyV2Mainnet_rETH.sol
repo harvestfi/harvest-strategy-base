@@ -27,7 +27,6 @@ contract MoonwellFoldStrategyV2Mainnet_rETH is MoonwellFoldStrategyV2 {
       usdc,
       760,
       780,
-      1000,
       true
     );
     rewardTokens = [well, usdc, well_new];
