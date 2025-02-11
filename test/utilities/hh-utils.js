@@ -149,9 +149,8 @@ async function setupCoreProtocol(config) {
     }
   }
 
+  let strategyImpl = null;
   if (config.strategyArtifact) {
-    let strategyImpl = null;
-
     if (!config.strategyArtifactIsUpgradable) {
       strategy = await config.strategyArtifact.new(
         ...config.strategyArgs,

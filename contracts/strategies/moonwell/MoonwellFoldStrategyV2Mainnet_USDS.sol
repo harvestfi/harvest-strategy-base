@@ -23,9 +23,9 @@ contract MoonwellFoldStrategyV2Mainnet_USDS is MoonwellFoldStrategyV2 {
       mToken,
       comptroller,
       well,
-      0,
+      810,
       829,
-      false
+      true
     );
     rewardTokens = [well];
   }
