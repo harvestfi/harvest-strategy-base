@@ -23,4 +23,6 @@ interface IStrategy {
     function doHardWork() external;
 
     function strategist() external view returns (address);
+
+    function morphoClaim(address _distr, bytes calldata _txData) external;
 }

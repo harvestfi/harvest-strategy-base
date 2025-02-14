@@ -51,6 +51,8 @@ interface IController {
 
     function removeHardWorker(address _worker) external;
 
+    function hardWorkers(address _worker) external view returns (bool);
+
     function salvage(address _token, uint256 amount) external;
 
     function salvageStrategy(address _strategy, address _token, uint256 amount) external;
