@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: Unlicense
-pragma solidity 0.8.21;
+pragma solidity 0.6.12;
 
 interface IVault {
+
     function initializeVault(
         address _storage,
         address _underlying,
@@ -21,7 +22,7 @@ interface IVault {
 
     function underlying() external view returns (address);
 
-    function underlyingUnit() external view returns (uint256);
+    function underlyingUnit() external view returns (uint);
 
     function strategy() external view returns (address);
 
@@ -42,7 +43,7 @@ interface IVault {
 
     function getPricePerFullShare() external view returns (uint256);
 
-    function underlyingBalanceWithInvestmentForHolder(address _holder) external view returns (uint256);
+    function underlyingBalanceWithInvestmentForHolder(address _holder) view external returns (uint256);
 
     /**
      * The total amount available to be deposited from this vault into the strategy, while adhering to the

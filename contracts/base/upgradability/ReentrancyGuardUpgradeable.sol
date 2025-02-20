@@ -1,5 +1,5 @@
 //SPDX-License-Identifier: Unlicense
-pragma solidity 0.8.21;
+pragma solidity 0.6.12;
 
 import "@openzeppelin/contracts-upgradeable/proxy/Initializable.sol";
 
@@ -7,6 +7,7 @@ import "@openzeppelin/contracts-upgradeable/proxy/Initializable.sol";
  * Same old `ReentrancyGuard`, but can be used by upgradable contracts
  */
 contract ReentrancyGuardUpgradeable is Initializable {
+
     bytes32 internal constant _NOT_ENTERED_SLOT = 0x62ae7bf2df4e95c187ea09c8c47c3fc3d9abc36298f5b5b6c5e2e7b4b291fe25;
 
     modifier nonReentrant() {
@@ -32,7 +33,7 @@ contract ReentrancyGuardUpgradeable is Initializable {
     }
 
     function _getNotEntered(bytes32 slot) private view returns (bool) {
-        uint256 str;
+        uint str;
         // solhint-disable-next-line no-inline-assembly
         assembly {
             str := sload(slot)
@@ -46,4 +47,5 @@ contract ReentrancyGuardUpgradeable is Initializable {
             sstore(slot, _value)
         }
     }
+
 }

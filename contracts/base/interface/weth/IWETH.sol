@@ -2,8 +2,8 @@
 // based on https://etherscan.io/address/0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2#code
 
 /**
- * Submitted for verification at Etherscan.io on 2017-12-12
- */
+ *Submitted for verification at Etherscan.io on 2017-12-12
+*/
 
 // Copyright (C) 2015, 2016, 2017 Dapphub
 
@@ -20,20 +20,22 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-pragma solidity 0.8.21;
+pragma solidity 0.6.12;
+
 
 interface IWETH {
+
     function balanceOf(address target) external view returns (uint256);
 
-    function deposit() external payable;
+    function deposit() external payable ;
 
-    function withdraw(uint256 wad) external;
+    function withdraw(uint wad) external ;
 
-    function totalSupply() external view returns (uint256);
+    function totalSupply() external view returns (uint) ;
 
-    function approve(address guy, uint256 wad) external returns (bool);
+    function approve(address guy, uint wad) external returns (bool) ;
 
-    function transfer(address dst, uint256 wad) external returns (bool);
+    function transfer(address dst, uint wad) external returns (bool) ;
 
-    function transferFrom(address src, address dst, uint256 wad) external returns (bool);
+    function transferFrom(address src, address dst, uint wad) external returns (bool);
 }

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.21;
+pragma solidity 0.6.12;
 
 /// @title EscrowSeam Interface
 /// @notice Interface for EscrowSeam contract.

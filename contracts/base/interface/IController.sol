@@ -1,26 +1,32 @@
 // SPDX-License-Identifier: Unlicense
-pragma solidity 0.8.21;
+pragma solidity 0.6.12;
+
 
 interface IController {
+
     // ========================= Events =========================
 
-    event QueueProfitSharingChange(uint256 profitSharingNumerator, uint256 validAtTimestamp);
-    event ConfirmProfitSharingChange(uint256 profitSharingNumerator);
+    event QueueProfitSharingChange(uint profitSharingNumerator, uint validAtTimestamp);
+    event ConfirmProfitSharingChange(uint profitSharingNumerator);
 
-    event QueueStrategistFeeChange(uint256 strategistFeeNumerator, uint256 validAtTimestamp);
-    event ConfirmStrategistFeeChange(uint256 strategistFeeNumerator);
+    event QueueStrategistFeeChange(uint strategistFeeNumerator, uint validAtTimestamp);
+    event ConfirmStrategistFeeChange(uint strategistFeeNumerator);
 
-    event QueuePlatformFeeChange(uint256 platformFeeNumerator, uint256 validAtTimestamp);
-    event ConfirmPlatformFeeChange(uint256 platformFeeNumerator);
+    event QueuePlatformFeeChange(uint platformFeeNumerator, uint validAtTimestamp);
+    event ConfirmPlatformFeeChange(uint platformFeeNumerator);
 
-    event QueueNextImplementationDelay(uint256 implementationDelay, uint256 validAtTimestamp);
-    event ConfirmNextImplementationDelay(uint256 implementationDelay);
+    event QueueNextImplementationDelay(uint implementationDelay, uint validAtTimestamp);
+    event ConfirmNextImplementationDelay(uint implementationDelay);
 
     event AddedStakingContract(address indexed stakingContract);
     event RemovedStakingContract(address indexed stakingContract);
 
     event SharePriceChangeLog(
-        address indexed vault, address indexed strategy, uint256 oldSharePrice, uint256 newSharePrice, uint256 timestamp
+        address indexed vault,
+        address indexed strategy,
+        uint256 oldSharePrice,
+        uint256 newSharePrice,
+        uint256 timestamp
     );
 
     // ==================== Functions ====================
@@ -93,15 +99,15 @@ interface IController {
 
     function feeDenominator() external view returns (uint256);
 
-    function setProfitSharingNumerator(uint256 _profitSharingNumerator) external;
+    function setProfitSharingNumerator(uint _profitSharingNumerator) external;
 
     function confirmSetProfitSharingNumerator() external;
 
-    function setStrategistFeeNumerator(uint256 _strategistFeeNumerator) external;
+    function setStrategistFeeNumerator(uint _strategistFeeNumerator) external;
 
     function confirmSetStrategistFeeNumerator() external;
 
-    function setPlatformFeeNumerator(uint256 _platformFeeNumerator) external;
+    function setPlatformFeeNumerator(uint _platformFeeNumerator) external;
 
     function confirmSetPlatformFeeNumerator() external;
 

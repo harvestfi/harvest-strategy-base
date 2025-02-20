@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: Unlicense
-pragma solidity 0.8.21;
+pragma solidity 0.6.12;
+
 
 interface IPotPool {
+
     function initializePotPool(
         address[] calldata _rewardTokens,
         address _lpToken,
@@ -14,25 +16,25 @@ interface IPotPool {
 
     function duration() external view returns (uint256);
 
-    function stakedBalanceOf(address _user) external view returns (uint256);
+    function stakedBalanceOf(address _user) external view returns (uint);
 
     function smartContractStakers(address _user) external view returns (bool);
 
-    function rewardTokens(uint256 _index) external view returns (address);
+    function rewardTokens(uint _index) external view returns (address);
 
     function getRewardTokens() external view returns (address[] memory);
 
-    function periodFinishForToken(address _rewardToken) external view returns (uint256);
+    function periodFinishForToken(address _rewardToken) external view returns (uint);
 
-    function rewardRateForToken(address _rewardToken) external view returns (uint256);
+    function rewardRateForToken(address _rewardToken) external view returns (uint);
 
-    function lastUpdateTimeForToken(address _rewardToken) external view returns (uint256);
+    function lastUpdateTimeForToken(address _rewardToken) external view returns (uint);
 
-    function rewardPerTokenStoredForToken(address _rewardToken) external view returns (uint256);
+    function rewardPerTokenStoredForToken(address _rewardToken) external view returns (uint);
 
-    function userRewardPerTokenPaidForToken(address _rewardToken, address _user) external view returns (uint256);
+    function userRewardPerTokenPaidForToken(address _rewardToken, address _user) external view returns (uint);
 
-    function rewardsForToken(address _rewardToken, address _user) external view returns (uint256);
+    function rewardsForToken(address _rewardToken, address _user) external view returns (uint);
 
     function lastTimeRewardApplicable(address _rewardToken) external view returns (uint256);
 

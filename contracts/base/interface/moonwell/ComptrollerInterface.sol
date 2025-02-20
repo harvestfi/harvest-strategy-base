@@ -1,108 +1,95 @@
 // SPDX-License-Identifier: BSD-3-Clause
-pragma solidity 0.8.21;
+pragma solidity 0.6.12;
 
 abstract contract ComptrollerInterface {
     /// @notice Indicator that this is a Comptroller contract (for inspection)
     bool public constant isComptroller = true;
 
-    /**
-     * Assets You Are In **
-     */
-    function enterMarkets(address[] calldata mTokens) external virtual returns (uint256[] memory);
-    function exitMarket(address mToken) external virtual returns (uint256);
+    /*** Assets You Are In ***/
 
-    /**
-     * Policy Hooks **
-     */
-    function mintAllowed(address mToken, address minter, uint256 mintAmount) external virtual returns (uint256);
+    function enterMarkets(address[] calldata mTokens) virtual external returns (uint[] memory);
+    function exitMarket(address mToken) virtual external returns (uint);
 
-    function redeemAllowed(address mToken, address redeemer, uint256 redeemTokens) external virtual returns (uint256);
+    /*** Policy Hooks ***/
+
+    function mintAllowed(address mToken, address minter, uint mintAmount) virtual external returns (uint);
+
+    function redeemAllowed(address mToken, address redeemer, uint redeemTokens) virtual external returns (uint);
 
     // Do not remove, still used by MToken
-    function redeemVerify(address mToken, address redeemer, uint256 redeemAmount, uint256 redeemTokens)
-        external
-        pure
-        virtual;
+    function redeemVerify(address mToken, address redeemer, uint redeemAmount, uint redeemTokens) pure virtual external;
 
-    function borrowAllowed(address mToken, address borrower, uint256 borrowAmount) external virtual returns (uint256);
+    function borrowAllowed(address mToken, address borrower, uint borrowAmount) virtual external returns (uint);
 
-    function repayBorrowAllowed(address mToken, address payer, address borrower, uint256 repayAmount)
-        external
-        virtual
-        returns (uint256);
+    function repayBorrowAllowed(
+        address mToken,
+        address payer,
+        address borrower,
+        uint repayAmount) virtual external returns (uint);
 
     function liquidateBorrowAllowed(
         address mTokenBorrowed,
         address mTokenCollateral,
         address liquidator,
         address borrower,
-        uint256 repayAmount
-    ) external view virtual returns (uint256);
+        uint repayAmount) virtual external view returns (uint);
 
     function seizeAllowed(
         address mTokenCollateral,
         address mTokenBorrowed,
         address liquidator,
         address borrower,
-        uint256 seizeTokens
-    ) external virtual returns (uint256);
+        uint seizeTokens) virtual external returns (uint);
 
-    function transferAllowed(address mToken, address src, address dst, uint256 transferTokens)
-        external
-        virtual
-        returns (uint256);
+    function transferAllowed(address mToken, address src, address dst, uint transferTokens) virtual external returns (uint);
 
-    /**
-     * Liquidity/Liquidation Calculations **
-     */
-    function liquidateCalculateSeizeTokens(address mTokenBorrowed, address mTokenCollateral, uint256 repayAmount)
-        external
-        view
-        virtual
-        returns (uint256, uint256);
+    /*** Liquidity/Liquidation Calculations ***/
 
-    function claimReward() external virtual;
+    function liquidateCalculateSeizeTokens(
+        address mTokenBorrowed,
+        address mTokenCollateral,
+        uint repayAmount) virtual external view returns (uint, uint);
+    
+    function claimReward() virtual external;
 
-    function borrowCaps(address) external view virtual returns (uint256);
-    function supplyCaps(address) external view virtual returns (uint256);
+    function borrowCaps(address) virtual external view returns(uint);
+    function supplyCaps(address) virtual external view returns(uint);
 
-    function _setMarketBorrowCaps(address[] calldata, uint256[] calldata) external virtual;
-    function _setMarketSupplyCaps(address[] calldata, uint256[] calldata) external virtual;
+    function _setMarketBorrowCaps(address[] calldata, uint256[] calldata) virtual external;
+    function _setMarketSupplyCaps(address[] calldata, uint256[] calldata) virtual external;
 }
 
 // The hooks that were patched out of the comptroller to make room for the supply caps, if we need them
 abstract contract ComptrollerInterfaceWithAllVerificationHooks is ComptrollerInterface {
-    function mintVerify(address mToken, address minter, uint256 mintAmount, uint256 mintTokens) external virtual;
+
+    function mintVerify(address mToken, address minter, uint mintAmount, uint mintTokens) virtual external;
 
     // Included in ComptrollerInterface already
     // function redeemVerify(address mToken, address redeemer, uint redeemAmount, uint redeemTokens) virtual external;
 
-    function borrowVerify(address mToken, address borrower, uint256 borrowAmount) external virtual;
+    function borrowVerify(address mToken, address borrower, uint borrowAmount) virtual external;
 
     function repayBorrowVerify(
         address mToken,
         address payer,
         address borrower,
-        uint256 repayAmount,
-        uint256 borrowerIndex
-    ) external virtual;
+        uint repayAmount,
+        uint borrowerIndex) virtual external;
 
     function liquidateBorrowVerify(
         address mTokenBorrowed,
         address mTokenCollateral,
         address liquidator,
         address borrower,
-        uint256 repayAmount,
-        uint256 seizeTokens
-    ) external virtual;
+        uint repayAmount,
+        uint seizeTokens) virtual external;
 
     function seizeVerify(
         address mTokenCollateral,
         address mTokenBorrowed,
         address liquidator,
         address borrower,
-        uint256 seizeTokens
-    ) external virtual;
+        uint seizeTokens) virtual external;
 
-    function transferVerify(address mToken, address src, address dst, uint256 transferTokens) external virtual;
+    function transferVerify(address mToken, address src, address dst, uint transferTokens) virtual external;
 }

@@ -1,34 +1,35 @@
 //SPDX-License-Identifier: Unlicense
-pragma solidity 0.8.21;
+pragma solidity 0.6.12;
 
 contract Storage {
-    address public governance;
-    address public controller;
 
-    constructor() public {
-        governance = msg.sender;
-    }
+  address public governance;
+  address public controller;
 
-    modifier onlyGovernance() {
-        require(isGovernance(msg.sender), "Not governance");
-        _;
-    }
+  constructor() public {
+    governance = msg.sender;
+  }
 
-    function setGovernance(address _governance) public onlyGovernance {
-        require(_governance != address(0), "new governance shouldn't be empty");
-        governance = _governance;
-    }
+  modifier onlyGovernance() {
+    require(isGovernance(msg.sender), "Not governance");
+    _;
+  }
 
-    function setController(address _controller) public onlyGovernance {
-        require(_controller != address(0), "new controller shouldn't be empty");
-        controller = _controller;
-    }
+  function setGovernance(address _governance) public onlyGovernance {
+    require(_governance != address(0), "new governance shouldn't be empty");
+    governance = _governance;
+  }
 
-    function isGovernance(address account) public view returns (bool) {
-        return account == governance;
-    }
+  function setController(address _controller) public onlyGovernance {
+    require(_controller != address(0), "new controller shouldn't be empty");
+    controller = _controller;
+  }
 
-    function isController(address account) public view returns (bool) {
-        return account == controller;
-    }
+  function isGovernance(address account) public view returns (bool) {
+    return account == governance;
+  }
+
+  function isController(address account) public view returns (bool) {
+    return account == controller;
+  }
 }

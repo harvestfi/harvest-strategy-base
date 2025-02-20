@@ -1,25 +1,20 @@
 // SPDX-License-Identifier: Unlicense
-pragma solidity 0.8.21;
+pragma solidity 0.6.12;
 
 import "@openzeppelin/contracts-upgradeable/proxy/Initializable.sol";
 
 contract VaultStorage is Initializable {
+
     bytes32 internal constant _STRATEGY_SLOT = 0xf1a169aa0f736c2813818fdfbdc5755c31e0839c8f49831a16543496b28574ea;
     bytes32 internal constant _UNDERLYING_SLOT = 0x1994607607e11d53306ef62e45e3bd85762c58d9bf38b5578bc4a258a26a7371;
     bytes32 internal constant _UNDERLYING_UNIT_SLOT = 0xa66bc57d4b4eed7c7687876ca77997588987307cb13ecc23f5e52725192e5fff;
-    bytes32 internal constant _VAULT_FRACTION_TO_INVEST_NUMERATOR_SLOT =
-        0x39122c9adfb653455d0c05043bd52fcfbc2be864e832efd3abc72ce5a3d7ed5a;
-    bytes32 internal constant _VAULT_FRACTION_TO_INVEST_DENOMINATOR_SLOT =
-        0x469a3bad2fab7b936c45eecd1f5da52af89cead3e2ed7f732b6f3fc92ed32308;
-    bytes32 internal constant _NEXT_IMPLEMENTATION_SLOT =
-        0xb1acf527cd7cd1668b30e5a9a1c0d845714604de29ce560150922c9d8c0937df;
-    bytes32 internal constant _NEXT_IMPLEMENTATION_TIMESTAMP_SLOT =
-        0x3bc747f4b148b37be485de3223c90b4468252967d2ea7f9fcbd8b6e653f434c9;
+    bytes32 internal constant _VAULT_FRACTION_TO_INVEST_NUMERATOR_SLOT = 0x39122c9adfb653455d0c05043bd52fcfbc2be864e832efd3abc72ce5a3d7ed5a;
+    bytes32 internal constant _VAULT_FRACTION_TO_INVEST_DENOMINATOR_SLOT = 0x469a3bad2fab7b936c45eecd1f5da52af89cead3e2ed7f732b6f3fc92ed32308;
+    bytes32 internal constant _NEXT_IMPLEMENTATION_SLOT = 0xb1acf527cd7cd1668b30e5a9a1c0d845714604de29ce560150922c9d8c0937df;
+    bytes32 internal constant _NEXT_IMPLEMENTATION_TIMESTAMP_SLOT = 0x3bc747f4b148b37be485de3223c90b4468252967d2ea7f9fcbd8b6e653f434c9;
     bytes32 internal constant _NEXT_STRATEGY_SLOT = 0xcd7bd9250b0e02f3b13eccf8c73ef5543cb618e0004628f9ca53b65fbdbde2d0;
-    bytes32 internal constant _NEXT_STRATEGY_TIMESTAMP_SLOT =
-        0x5d2b24811886ad126f78c499d71a932a5435795e4f2f6552f0900f12d663cdcf;
-    bytes32 internal constant _INVEST_ON_DEPOSIT_SLOT =
-        0xf7bd21df2fc19bd074b391db8b42bdc473ae2e1b3067fdb7b05f39bd9eda16ea;
+    bytes32 internal constant _NEXT_STRATEGY_TIMESTAMP_SLOT = 0x5d2b24811886ad126f78c499d71a932a5435795e4f2f6552f0900f12d663cdcf;
+    bytes32 internal constant _INVEST_ON_DEPOSIT_SLOT = 0xf7bd21df2fc19bd074b391db8b42bdc473ae2e1b3067fdb7b05f39bd9eda16ea;
     bytes32 internal constant _PAUSED_SLOT = 0xf1cf856d03630b74791fc293cfafd739932a5a075b02d357fb7a726a38777930;
 
     /**
@@ -33,24 +28,12 @@ contract VaultStorage is Initializable {
         assert(_STRATEGY_SLOT == bytes32(uint256(keccak256("eip1967.vaultStorage.strategy")) - 1));
         assert(_UNDERLYING_SLOT == bytes32(uint256(keccak256("eip1967.vaultStorage.underlying")) - 1));
         assert(_UNDERLYING_UNIT_SLOT == bytes32(uint256(keccak256("eip1967.vaultStorage.underlyingUnit")) - 1));
-        assert(
-            _VAULT_FRACTION_TO_INVEST_NUMERATOR_SLOT
-                == bytes32(uint256(keccak256("eip1967.vaultStorage.vaultFractionToInvestNumerator")) - 1)
-        );
-        assert(
-            _VAULT_FRACTION_TO_INVEST_DENOMINATOR_SLOT
-                == bytes32(uint256(keccak256("eip1967.vaultStorage.vaultFractionToInvestDenominator")) - 1)
-        );
+        assert(_VAULT_FRACTION_TO_INVEST_NUMERATOR_SLOT == bytes32(uint256(keccak256("eip1967.vaultStorage.vaultFractionToInvestNumerator")) - 1));
+        assert(_VAULT_FRACTION_TO_INVEST_DENOMINATOR_SLOT == bytes32(uint256(keccak256("eip1967.vaultStorage.vaultFractionToInvestDenominator")) - 1));
         assert(_NEXT_IMPLEMENTATION_SLOT == bytes32(uint256(keccak256("eip1967.vaultStorage.nextImplementation")) - 1));
-        assert(
-            _NEXT_IMPLEMENTATION_TIMESTAMP_SLOT
-                == bytes32(uint256(keccak256("eip1967.vaultStorage.nextImplementationTimestamp")) - 1)
-        );
+        assert(_NEXT_IMPLEMENTATION_TIMESTAMP_SLOT == bytes32(uint256(keccak256("eip1967.vaultStorage.nextImplementationTimestamp")) - 1));
         assert(_NEXT_STRATEGY_SLOT == bytes32(uint256(keccak256("eip1967.vaultStorage.nextStrategy")) - 1));
-        assert(
-            _NEXT_STRATEGY_TIMESTAMP_SLOT
-                == bytes32(uint256(keccak256("eip1967.vaultStorage.nextStrategyTimestamp")) - 1)
-        );
+        assert(_NEXT_STRATEGY_TIMESTAMP_SLOT == bytes32(uint256(keccak256("eip1967.vaultStorage.nextStrategyTimestamp")) - 1));
         assert(_INVEST_ON_DEPOSIT_SLOT == bytes32(uint256(keccak256("eip1967.vaultStorage.investOnDeposit")) - 1));
         assert(_PAUSED_SLOT == bytes32(uint256(keccak256("eip1967.vaultStorage.paused")) - 1));
     }

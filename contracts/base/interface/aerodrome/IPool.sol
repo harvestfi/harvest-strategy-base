@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: BUSL-1.1
-pragma solidity 0.8.21;
+pragma solidity 0.6.12;
 pragma experimental ABIEncoderV2;
 
 interface IPool {
@@ -134,10 +134,12 @@ interface IPool {
     /// @param points .
     /// @param window .
     /// @return Array of TWAP prices
-    function sample(address tokenIn, uint256 amountIn, uint256 points, uint256 window)
-        external
-        view
-        returns (uint256[] memory);
+    function sample(
+        address tokenIn,
+        uint256 amountIn,
+        uint256 points,
+        uint256 window
+    ) external view returns (uint256[] memory);
 
     /// @notice This low-level function should be called from a contract which performs important safety checks
     /// @param amount0Out   Amount of token0 to send to `to`

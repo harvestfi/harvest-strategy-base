@@ -1,16 +1,29 @@
 // SPDX-License-Identifier: gpl-3.0
-pragma solidity 0.8.21;
+pragma solidity 0.6.12;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 interface IStakingRewards {
-    event RewardsSet(address rewardsToken, uint256 start, uint256 end, uint256 total);
+    event RewardsSet(
+        address rewardsToken,
+        uint256 start,
+        uint256 end,
+        uint256 total
+    );
 
-    event Staked(address indexed user, address indexed onBehalfOf, uint256 amount);
+    event Staked(
+        address indexed user,
+        address indexed onBehalfOf,
+        uint256 amount
+    );
 
     event Withdraw(address indexed user, address indexed to, uint256 amount);
 
-    event RewardPaid(address indexed user, address indexed rewardsToken, uint256 claimed);
+    event RewardPaid(
+        address indexed user,
+        address indexed rewardsToken,
+        uint256 claimed
+    );
 
     struct Reward {
         uint256 startTime;
@@ -20,7 +33,9 @@ interface IStakingRewards {
         uint256 rewardPerTokenStored;
     }
 
-    function rewardData(address) external view returns (uint256, uint256, uint256, uint256, uint256);
+    function rewardData(
+        address
+    ) external view returns (uint256, uint256, uint256, uint256, uint256);
 
     function stakedToken() external view returns (IERC20);
 
@@ -32,13 +47,20 @@ interface IStakingRewards {
 
     function rewardsTokenListLength() external view returns (uint256);
 
-    function earned(address _account, address _rewardsToken) external view returns (uint256);
+    function earned(
+        address _account,
+        address _rewardsToken
+    ) external view returns (uint256);
 
-    function stake(uint256 _amount, address onBehalfOf) external;
+    function stake(uint _amount, address onBehalfOf) external;
 
-    function withdraw(uint256 _amount, address to) external;
+    function withdraw(uint _amount, address to) external;
 
-    function withdrawByLendingPool(uint256 _amount, address user, address to) external;
+    function withdrawByLendingPool(
+        uint _amount,
+        address user,
+        address to
+    ) external;
 
     function claim() external;
 }

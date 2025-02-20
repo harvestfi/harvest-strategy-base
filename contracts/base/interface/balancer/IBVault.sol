@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: Unlicense
-pragma solidity 0.8.21;
+pragma solidity 0.6.12;
 pragma experimental ABIEncoderV2;
 
-interface IAsset {}
+interface IAsset {
+}
 
 interface IBVault {
     // Internal Balance
@@ -31,7 +32,7 @@ interface IBVault {
 
     /**
      * @dev Data for `manageUserBalance` operations, which include the possibility for ETH to be sent and received
-     *  without manual WETH wrapping or unwrapping.
+     without manual WETH wrapping or unwrapping.
      */
     struct UserBalanceOp {
         UserBalanceOpKind kind;
@@ -79,12 +80,7 @@ interface IBVault {
     //
     // Emits an `ExternalBalanceTransfer` event.
 
-    enum UserBalanceOpKind {
-        DEPOSIT_INTERNAL,
-        WITHDRAW_INTERNAL,
-        TRANSFER_INTERNAL,
-        TRANSFER_EXTERNAL
-    }
+    enum UserBalanceOpKind { DEPOSIT_INTERNAL, WITHDRAW_INTERNAL, TRANSFER_INTERNAL, TRANSFER_EXTERNAL }
 
     /**
      * @dev Emitted when a user's Internal Balance changes, either from calls to `manageUserBalance`, or through
@@ -117,11 +113,7 @@ interface IBVault {
     //  - Two Token: only allows two tokens to be registered. This achieves the lowest possible swap gas cost. Like
     // minimal swap info Pools, these are called via IMinimalSwapInfoPool.
 
-    enum PoolSpecialization {
-        GENERAL,
-        MINIMAL_SWAP_INFO,
-        TWO_TOKEN
-    }
+    enum PoolSpecialization { GENERAL, MINIMAL_SWAP_INFO, TWO_TOKEN }
 
     /**
      * @dev Registers the caller account as a Pool with a given specialization setting. Returns the Pool's ID, which
@@ -170,7 +162,11 @@ interface IBVault {
      *
      * Emits a `TokensRegistered` event.
      */
-    function registerTokens(bytes32 poolId, address[] calldata tokens, address[] calldata assetManagers) external;
+    function registerTokens(
+        bytes32 poolId,
+        address[] calldata tokens,
+        address[] calldata assetManagers
+    ) external;
 
     /**
      * @dev Emitted when a Pool registers tokens by calling `registerTokens`.
@@ -215,7 +211,12 @@ interface IBVault {
     function getPoolTokenInfo(bytes32 poolId, address token)
         external
         view
-        returns (uint256 cash, uint256 managed, uint256 lastChangeBlock, address assetManager);
+        returns (
+            uint256 cash,
+            uint256 managed,
+            uint256 lastChangeBlock,
+            address assetManager
+        );
 
     /**
      * @dev Returns a Pool's registered tokens, the total balance for each, and the latest block when *any* of
@@ -234,7 +235,11 @@ interface IBVault {
     function getPoolTokens(bytes32 poolId)
         external
         view
-        returns (address[] memory tokens, uint256[] memory balances, uint256 lastChangeBlock);
+        returns (
+            address[] memory tokens,
+            uint256[] memory balances,
+            uint256 lastChangeBlock
+        );
 
     /**
      * @dev Called by users to join a Pool, which transfers tokens from `sender` into the Pool's balance. This will
@@ -268,20 +273,15 @@ interface IBVault {
      *
      * Emits a `PoolBalanceChanged` event.
      */
-    function joinPool(bytes32 poolId, address sender, address recipient, JoinPoolRequest calldata request)
-        external
-        payable;
+    function joinPool(
+        bytes32 poolId,
+        address sender,
+        address recipient,
+        JoinPoolRequest calldata request
+    ) external payable;
 
-    enum JoinKind {
-        INIT,
-        EXACT_TOKENS_IN_FOR_BPT_OUT,
-        TOKEN_IN_FOR_EXACT_BPT_OUT
-    }
-    enum ExitKind {
-        EXACT_BPT_IN_FOR_ONE_TOKEN_OUT,
-        EXACT_BPT_IN_FOR_TOKENS_OUT,
-        BPT_IN_FOR_EXACT_TOKENS_OUT
-    }
+    enum JoinKind { INIT, EXACT_TOKENS_IN_FOR_BPT_OUT, TOKEN_IN_FOR_EXACT_BPT_OUT }
+    enum ExitKind { EXACT_BPT_IN_FOR_ONE_TOKEN_OUT, EXACT_BPT_IN_FOR_TOKENS_OUT, BPT_IN_FOR_EXACT_TOKENS_OUT }
 
     struct JoinPoolRequest {
         IAsset[] assets;
@@ -325,8 +325,12 @@ interface IBVault {
      *
      * Emits a `PoolBalanceChanged` event.
      */
-    function exitPool(bytes32 poolId, address sender, address payable recipient, ExitPoolRequest calldata request)
-        external;
+    function exitPool(
+        bytes32 poolId,
+        address sender,
+        address payable recipient,
+        ExitPoolRequest calldata request
+    ) external;
 
     struct ExitPoolRequest {
         IAsset[] assets;
@@ -346,10 +350,7 @@ interface IBVault {
         uint256[] protocolFeeAmounts
     );
 
-    enum PoolBalanceChangeKind {
-        JOIN,
-        EXIT
-    }
+    enum PoolBalanceChangeKind { JOIN, EXIT }
 
     // Swaps
     //
@@ -398,10 +399,7 @@ interface IBVault {
     //
     // Finally, Internal Balance can be used when either sending or receiving tokens.
 
-    enum SwapKind {
-        GIVEN_IN,
-        GIVEN_OUT
-    }
+    enum SwapKind { GIVEN_IN, GIVEN_OUT }
 
     /**
      * @dev Performs a swap with a single Pool.
@@ -416,10 +414,12 @@ interface IBVault {
      *
      * Emits a `Swap` event.
      */
-    function swap(SingleSwap calldata singleSwap, FundManagement calldata funds, uint256 limit, uint256 deadline)
-        external
-        payable
-        returns (uint256);
+    function swap(
+        SingleSwap calldata singleSwap,
+        FundManagement calldata funds,
+        uint256 limit,
+        uint256 deadline
+    ) external payable returns (uint256);
 
     /**
      * @dev Data for a single swap executed by `swap`. `amount` is either `amountIn` or `amountOut` depending on
@@ -500,7 +500,11 @@ interface IBVault {
      * @dev Emitted for each individual swap performed by `swap` or `batchSwap`.
      */
     event Swap(
-        bytes32 indexed poolId, address indexed tokenIn, address indexed tokenOut, uint256 amountIn, uint256 amountOut
+        bytes32 indexed poolId,
+        address indexed tokenIn,
+        address indexed tokenOut,
+        uint256 amountIn,
+        uint256 amountOut
     );
 
     /**
@@ -549,7 +553,7 @@ interface IBVault {
         FundManagement calldata funds
     ) external returns (int256[] memory assetDeltas);
 
-    function getProtocolFeesCollector() external view returns (address);
+    function getProtocolFeesCollector() external view returns(address);
 
     /**
      * @dev Performs a 'flash loan', sending tokens to `recipient`, executing the `receiveFlashLoan` hook on it,
@@ -563,8 +567,12 @@ interface IBVault {
      *
      * Emits `FlashLoan` events.
      */
-    function flashLoan(address recipient, address[] memory tokens, uint256[] memory amounts, bytes memory userData)
-        external;
+    function flashLoan(
+        address recipient,
+        address[] memory tokens,
+        uint256[] memory amounts,
+        bytes memory userData
+    ) external;
 
     /**
      * @dev Emitted for each individual flash loan performed by `flashLoan`.

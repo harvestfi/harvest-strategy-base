@@ -1,13 +1,16 @@
 // SPDX-License-Identifier: Unlicense
-pragma solidity 0.8.21;
+pragma solidity 0.6.12;
 
 import "./inheritance/Controllable.sol";
 import "./interface/ICLVault.sol";
 
 contract CLRebalanceChecker is Controllable {
+    
     address[] public clVaults;
-
-    constructor(address _storage) public Controllable(_storage) {}
+    
+    constructor(
+        address _storage
+    ) public Controllable(_storage) {}
 
     function addVault(address _target) public onlyGovernance {
         clVaults.push(_target);
@@ -20,15 +23,15 @@ contract CLRebalanceChecker is Controllable {
     }
 
     function removeVault(address _target) public onlyGovernance {
-        uint256 i = getVaultIndex(_target);
-        require(i != uint256(-1), "Vault does not exists");
-        uint256 lastIndex = clVaults.length - 1;
+      uint256 i = getVaultIndex(_target);
+      require(i != uint256(-1), "Vault does not exists");
+      uint256 lastIndex = clVaults.length - 1;
 
-        // swap
-        clVaults[i] = clVaults[lastIndex];
+      // swap
+      clVaults[i] = clVaults[lastIndex];
 
-        // delete last element
-        clVaults.pop();
+      // delete last element
+      clVaults.pop();
     }
 
     function removeVaults(address[] memory _targets) public onlyGovernance {
@@ -39,21 +42,20 @@ contract CLRebalanceChecker is Controllable {
 
     // If the return value is MAX_UINT256, it means that
     // the specified vault is not in the list
-    function getVaultIndex(address _target) public view returns (uint256) {
-        for (uint256 i = 0; i < clVaults.length; i++) {
-            if (clVaults[i] == _target) {
-                return i;
-            }
-        }
-        return uint256(-1);
+    function getVaultIndex(address _target) public view returns(uint256) {
+      for(uint i = 0 ; i < clVaults.length ; i++){
+        if(clVaults[i] == _target)
+          return i;
+      }
+      return uint256(-1);
     }
 
     function checker() external view returns (bool canExec, bytes memory execPayload) {
         for (uint256 i = 0; i < clVaults.length; i++) {
             (canExec, execPayload) = ICLVault(clVaults[i]).checker();
-            if (canExec) return (true, execPayload);
+            if (canExec) return(true, execPayload);
         }
 
-        return (false, bytes("No vaults to harvest"));
+        return(false, bytes("No vaults to harvest"));
     }
 }

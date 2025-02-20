@@ -1,10 +1,10 @@
-require('@nomiclabs/hardhat-etherscan')
-require('@nomiclabs/hardhat-truffle5')
-require('@nomiclabs/hardhat-web3')
-require('@nomiclabs/hardhat-ethers')
-require('hardhat-contract-sizer')
+require("@nomiclabs/hardhat-etherscan");
+require("@nomiclabs/hardhat-truffle5");
+require("@nomiclabs/hardhat-web3");
+require("@nomiclabs/hardhat-ethers");
+require('hardhat-contract-sizer');
 
-const secret = require('./dev-keys.json')
+const secret = require('./dev-keys.json');
 
 // You need to export an object to set up your config
 // Go to https://hardhat.org/config/ to learn more
@@ -13,7 +13,7 @@ const secret = require('./dev-keys.json')
  * @type import('hardhat/config').HardhatUserConfig
  */
 module.exports = {
-  defaultNetwork: 'hardhat',
+  defaultNetwork: "hardhat",
   networks: {
     hardhat: {
       accounts: {
@@ -35,16 +35,7 @@ module.exports = {
   solidity: {
     compilers: [
       {
-        version: '0.8.21',
-        settings: {
-          optimizer: {
-            enabled: true,
-            runs: 1,
-          },
-        },
-      },
-      {
-        version: '0.8.21',
+        version: "0.6.12",
         settings: {
           optimizer: {
             enabled: true,
@@ -55,7 +46,7 @@ module.exports = {
     ],
   },
   mocha: {
-    timeout: 2000000,
+    timeout: 2000000
   },
   etherscan: {
     apiKey: {
@@ -63,14 +54,14 @@ module.exports = {
     },
     customChains: [
       {
-        network: 'base',
+        network: "base",
         chainId: 8453,
         urls: {
-          apiURL: 'https://api.basescan.org/api',
-          browserURL: 'https://basescan.com',
-        },
-      },
-    ],
+          apiURL: "https://api.basescan.org/api",
+          browserURL: "https://basescan.com"
+        }
+      }
+    ]
   },
   contractSizer: {
     alphaSort: false,
@@ -78,4 +69,4 @@ module.exports = {
     runOnCompile: false,
     strict: false,
   },
-}
+};

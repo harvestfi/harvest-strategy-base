@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Unlicense
-pragma solidity 0.8.21;
+pragma solidity 0.6.12;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "./interface/IStrategyFactory.sol";
@@ -10,105 +10,111 @@ import "../interface/IVault.sol";
 import "../inheritance/Governable.sol";
 
 contract MegaFactory is Ownable {
-    enum VaultType {
-        None,
-        Regular
-    }
 
-    enum StrategyType {
-        None,
-        Upgradable
-    }
+  enum VaultType {
+    None,
+    Regular
+  }
 
-    address public potPoolFactory;
-    mapping(uint256 => address) public vaultFactories;
-    mapping(uint256 => address) public strategyFactories;
+  enum StrategyType {
+    None,
+    Upgradable
+  }
 
-    struct CompletedDeployment {
-        VaultType vaultType;
-        address Underlying;
-        address NewVault;
-        address NewStrategy;
-        address NewPool;
-    }
+  address public potPoolFactory;
+  mapping(uint256 => address) public vaultFactories;
+  mapping(uint256 => address) public strategyFactories;
 
-    event DeploymentCompleted(string id);
+  struct CompletedDeployment {
+    VaultType vaultType;
+    address Underlying;
+    address NewVault;
+    address NewStrategy;
+    address NewPool;
+  }
 
-    mapping(string => CompletedDeployment) public completedDeployments;
-    mapping(address => bool) public authorizedDeployers;
+  event DeploymentCompleted(string id);
 
-    address public multisig;
-    address public actualStorage;
+  mapping (string => CompletedDeployment) public completedDeployments;
+  mapping (address => bool) public authorizedDeployers;
 
-    /* methods to make compatible with Storage */
-    function governance() external view returns (address) {
-        return address(this); // fake governance
-    }
+  address public multisig;
+  address public actualStorage;
 
-    function isGovernance(address addr) external view returns (bool) {
-        return addr == address(this); // fake governance
-    }
+  /* methods to make compatible with Storage */
+  function governance() external view returns (address) {
+    return address(this); // fake governance
+  }
 
-    function isController(address addr) external view returns (bool) {
-        return addr == address(this); // fake controller
-    }
+  function isGovernance(address addr) external view returns (bool) {
+    return addr == address(this); // fake governance
+  }
 
-    modifier onlyAuthorizedDeployer(string memory id) {
-        require(completedDeployments[id].vaultType == VaultType.None, "cannot reuse id");
-        require(authorizedDeployers[msg.sender], "unauthorized deployer");
-        _;
-        emit DeploymentCompleted(id);
-    }
+  function isController(address addr) external view returns (bool) {
+    return addr == address(this); // fake controller
+  }
 
-    constructor(address _storage, address _multisig) public {
-        multisig = _multisig;
-        actualStorage = _storage;
-        setAuthorization(owner(), true);
-        setAuthorization(multisig, true);
-    }
+  modifier onlyAuthorizedDeployer(string memory id) {
+    require(completedDeployments[id].vaultType == VaultType.None, "cannot reuse id");
+    require(authorizedDeployers[msg.sender], "unauthorized deployer");
+    _;
+    emit DeploymentCompleted(id);
+  }
 
-    function setAuthorization(address userAddress, bool isDeployer) public onlyOwner {
-        authorizedDeployers[userAddress] = isDeployer;
-    }
+  constructor(address _storage, address _multisig) public {
+    multisig = _multisig;
+    actualStorage = _storage;
+    setAuthorization(owner(), true);
+    setAuthorization(multisig, true);
+  }
 
-    function setVaultFactory(uint256 vaultType, address factoryAddress) external onlyOwner {
-        vaultFactories[vaultType] = factoryAddress;
-    }
+  function setAuthorization(address userAddress, bool isDeployer) public onlyOwner {
+    authorizedDeployers[userAddress] = isDeployer;
+  }
 
-    function setStrategyFactory(uint256 strategyType, address factoryAddress) external onlyOwner {
-        strategyFactories[strategyType] = factoryAddress;
-    }
+  function setVaultFactory(uint256 vaultType, address factoryAddress) external onlyOwner {
+    vaultFactories[vaultType] = factoryAddress;
+  }
 
-    function setPotPoolFactory(address factoryAddress) external onlyOwner {
-        potPoolFactory = factoryAddress;
-    }
+  function setStrategyFactory(uint256 strategyType, address factoryAddress) external onlyOwner {
+    strategyFactories[strategyType] = factoryAddress;
+  }
 
-    function createRegularVault(string calldata id, address underlying) external onlyAuthorizedDeployer(id) {
-        address vault = IVaultFactory(vaultFactories[uint256(VaultType.Regular)]).deploy(actualStorage, underlying);
+  function setPotPoolFactory(address factoryAddress) external onlyOwner {
+    potPoolFactory = factoryAddress;
+  }
 
-        completedDeployments[id] = CompletedDeployment(
-            VaultType.Regular, underlying, vault, address(0), IPoolFactory(potPoolFactory).deploy(actualStorage, vault)
-        );
-    }
+  function createRegularVault(string calldata id, address underlying) external onlyAuthorizedDeployer(id) {
+    address vault = IVaultFactory(vaultFactories[uint256(VaultType.Regular)]).deploy(
+     actualStorage,
+     underlying
+    );
 
-    function createRegularVaultUsingUpgradableStrategy(
-        string calldata id,
-        address underlying,
-        address strategyImplementation
-    ) external onlyAuthorizedDeployer(id) {
-        address vault = IVaultFactory(vaultFactories[uint256(VaultType.Regular)]).deploy(
-            address(this), // using this as initial storage, then switching to actualStorage
-            underlying
-        );
+    completedDeployments[id] = CompletedDeployment(
+      VaultType.Regular,
+      underlying,
+      vault,
+      address(0),
+      IPoolFactory(potPoolFactory).deploy(actualStorage, vault)
+    );
+  }
 
-        address strategy = IStrategyFactory(strategyFactories[uint256(StrategyType.Upgradable)]).deploy(
-            actualStorage, vault, strategyImplementation
-        );
-        IVault(vault).setStrategy(strategy);
-        Governable(vault).setStorage(actualStorage);
+  function createRegularVaultUsingUpgradableStrategy(string calldata id, address underlying, address strategyImplementation) external onlyAuthorizedDeployer(id) {
+    address vault = IVaultFactory(vaultFactories[uint256(VaultType.Regular)]).deploy(
+     address(this), // using this as initial storage, then switching to actualStorage
+     underlying
+    );
 
-        completedDeployments[id] = CompletedDeployment(
-            VaultType.Regular, underlying, vault, strategy, IPoolFactory(potPoolFactory).deploy(actualStorage, vault)
-        );
-    }
+    address strategy = IStrategyFactory(strategyFactories[uint256(StrategyType.Upgradable)]).deploy(actualStorage, vault, strategyImplementation);
+    IVault(vault).setStrategy(strategy);
+    Governable(vault).setStorage(actualStorage);
+
+    completedDeployments[id] = CompletedDeployment(
+      VaultType.Regular,
+      underlying,
+      vault,
+      strategy,
+      IPoolFactory(potPoolFactory).deploy(actualStorage, vault)
+    );
+  }
 }
