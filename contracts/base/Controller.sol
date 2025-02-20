@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Unlicense
-pragma solidity 0.6.12;
+pragma solidity 0.8.21;
 
 import "@openzeppelin/contracts/utils/Address.sol";
 import "@openzeppelin/contracts/math/SafeMath.sol";
@@ -13,7 +13,6 @@ import "./interface/IStrategy.sol";
 import "./interface/IVault.sol";
 
 import "./RewardForwarder.sol";
-
 
 contract Controller is Governable {
     using SafeERC20 for IERC20;
@@ -55,25 +54,25 @@ contract Controller is Governable {
     uint256 public constant FEE_DENOMINATOR = 10000;
 
     /// @notice This mapping allows certain contracts to stake on a user's behalf
-    mapping (address => bool) public addressWhitelist;
-    mapping (bytes32 => bool) public codeWhitelist;
+    mapping(address => bool) public addressWhitelist;
+    mapping(bytes32 => bool) public codeWhitelist;
 
     // All eligible hardWorkers that we have
-    mapping (address => bool) public hardWorkers;
+    mapping(address => bool) public hardWorkers;
 
     // ========================= Events =========================
 
-    event QueueProfitSharingChange(uint profitSharingNumerator, uint validAtTimestamp);
-    event ConfirmProfitSharingChange(uint profitSharingNumerator);
+    event QueueProfitSharingChange(uint256 profitSharingNumerator, uint256 validAtTimestamp);
+    event ConfirmProfitSharingChange(uint256 profitSharingNumerator);
 
-    event QueueStrategistFeeChange(uint strategistFeeNumerator, uint validAtTimestamp);
-    event ConfirmStrategistFeeChange(uint strategistFeeNumerator);
+    event QueueStrategistFeeChange(uint256 strategistFeeNumerator, uint256 validAtTimestamp);
+    event ConfirmStrategistFeeChange(uint256 strategistFeeNumerator);
 
-    event QueuePlatformFeeChange(uint platformFeeNumerator, uint validAtTimestamp);
-    event ConfirmPlatformFeeChange(uint platformFeeNumerator);
+    event QueuePlatformFeeChange(uint256 platformFeeNumerator, uint256 validAtTimestamp);
+    event ConfirmPlatformFeeChange(uint256 platformFeeNumerator);
 
-    event QueueNextImplementationDelay(uint implementationDelay, uint validAtTimestamp);
-    event ConfirmNextImplementationDelay(uint implementationDelay);
+    event QueueNextImplementationDelay(uint256 implementationDelay, uint256 validAtTimestamp);
+    event ConfirmNextImplementationDelay(uint256 implementationDelay);
 
     event AddedAddressToWhitelist(address indexed _address);
     event RemovedAddressFromWhitelist(address indexed _address);
@@ -82,18 +81,13 @@ contract Controller is Governable {
     event RemovedCodeFromWhitelist(address indexed _address);
 
     event SharePriceChangeLog(
-        address indexed vault,
-        address indexed strategy,
-        uint256 oldSharePrice,
-        uint256 newSharePrice,
-        uint256 timestamp
+        address indexed vault, address indexed strategy, uint256 oldSharePrice, uint256 newSharePrice, uint256 timestamp
     );
 
     // ========================= Modifiers =========================
 
     modifier onlyHardWorkerOrGovernance() {
-        require(hardWorkers[msg.sender] || (msg.sender == governance()),
-            "only hard worker can call this");
+        require(hardWorkers[msg.sender] || (msg.sender == governance()), "only hard worker can call this");
         _;
     }
 
@@ -104,10 +98,8 @@ contract Controller is Governable {
         address _profitSharingReceiver,
         address _rewardForwarder,
         address _universalLiquidator,
-        uint _nextImplementationDelay
-    )
-    Governable(_storage)
-    public {
+        uint256 _nextImplementationDelay
+    ) public Governable(_storage) {
         require(_targetToken != address(0), "_targetToken should not be empty");
         require(_protocolFeeReceiver != address(0), "_protocolFeeReceiver should not be empty");
         require(_profitSharingReceiver != address(0), "_profitSharingReceiver should not be empty");
@@ -122,7 +114,7 @@ contract Controller is Governable {
         nextImplementationDelay = _nextImplementationDelay;
     }
 
-        // [Grey list]
+    // [Grey list]
     // An EOA can safely interact with the system no matter what.
     // If you're using Metamask, you're using an EOA.
     // Only smart contracts may be affected by this grey list.
@@ -143,7 +135,7 @@ contract Controller is Governable {
 
     function addMultipleToWhitelist(address[] memory _targets) public onlyGovernance {
         for (uint256 i = 0; i < _targets.length; i++) {
-        addressWhitelist[_targets[i]] = true;
+            addressWhitelist[_targets[i]] = true;
         }
     }
 
@@ -154,13 +146,13 @@ contract Controller is Governable {
 
     function removeMultipleFromWhitelist(address[] memory _targets) public onlyGovernance {
         for (uint256 i = 0; i < _targets.length; i++) {
-        addressWhitelist[_targets[i]] = false;
+            addressWhitelist[_targets[i]] = false;
         }
     }
 
     function getContractHash(address a) public view returns (bytes32 hash) {
         assembly {
-        hash := extcodehash(a)
+            hash := extcodehash(a)
         }
     }
 
@@ -212,11 +204,7 @@ contract Controller is Governable {
         uint256 oldSharePrice = IVault(_vault).getPricePerFullShare();
         IVault(_vault).doHardWork();
         emit SharePriceChangeLog(
-            _vault,
-            IVault(_vault).strategy(),
-            oldSharePrice,
-            IVault(_vault).getPricePerFullShare(),
-            block.timestamp
+            _vault, IVault(_vault).strategy(), oldSharePrice, IVault(_vault).getPricePerFullShare(), block.timestamp
         );
     }
 
@@ -242,12 +230,12 @@ contract Controller is Governable {
         IStrategy(_strategy).salvageToken(governance(), _token, _amount);
     }
 
-    function feeDenominator() public pure returns (uint) {
+    function feeDenominator() public pure returns (uint256) {
         // keep the interface for this function as a `view` for now, in case it changes in the future
         return FEE_DENOMINATOR;
     }
 
-    function setProfitSharingNumerator(uint _profitSharingNumerator) public onlyGovernance {
+    function setProfitSharingNumerator(uint256 _profitSharingNumerator) public onlyGovernance {
         require(
             _profitSharingNumerator + strategistFeeNumerator + platformFeeNumerator <= MAX_TOTAL_FEE,
             "total fee too high"
@@ -260,9 +248,8 @@ contract Controller is Governable {
 
     function confirmSetProfitSharingNumerator() public onlyGovernance {
         require(
-            nextProfitSharingNumerator != 0
-            && nextProfitSharingNumeratorTimestamp != 0
-            && block.timestamp >= nextProfitSharingNumeratorTimestamp,
+            nextProfitSharingNumerator != 0 && nextProfitSharingNumeratorTimestamp != 0
+                && block.timestamp >= nextProfitSharingNumeratorTimestamp,
             "invalid timestamp or no new profit sharing numerator confirmed"
         );
         require(
@@ -276,7 +263,7 @@ contract Controller is Governable {
         emit ConfirmProfitSharingChange(profitSharingNumerator);
     }
 
-    function setStrategistFeeNumerator(uint _strategistFeeNumerator) public onlyGovernance {
+    function setStrategistFeeNumerator(uint256 _strategistFeeNumerator) public onlyGovernance {
         require(
             _strategistFeeNumerator + platformFeeNumerator + profitSharingNumerator <= MAX_TOTAL_FEE,
             "total fee too high"
@@ -289,9 +276,8 @@ contract Controller is Governable {
 
     function confirmSetStrategistFeeNumerator() public onlyGovernance {
         require(
-            nextStrategistFeeNumerator != 0
-            && nextStrategistFeeNumeratorTimestamp != 0
-            && block.timestamp >= nextStrategistFeeNumeratorTimestamp,
+            nextStrategistFeeNumerator != 0 && nextStrategistFeeNumeratorTimestamp != 0
+                && block.timestamp >= nextStrategistFeeNumeratorTimestamp,
             "invalid timestamp or no new strategist fee numerator confirmed"
         );
         require(
@@ -305,7 +291,7 @@ contract Controller is Governable {
         emit ConfirmStrategistFeeChange(strategistFeeNumerator);
     }
 
-    function setPlatformFeeNumerator(uint _platformFeeNumerator) public onlyGovernance {
+    function setPlatformFeeNumerator(uint256 _platformFeeNumerator) public onlyGovernance {
         require(
             _platformFeeNumerator + strategistFeeNumerator + profitSharingNumerator <= MAX_TOTAL_FEE,
             "total fee too high"
@@ -318,9 +304,8 @@ contract Controller is Governable {
 
     function confirmSetPlatformFeeNumerator() public onlyGovernance {
         require(
-            nextPlatformFeeNumerator != 0
-            && nextPlatformFeeNumeratorTimestamp != 0
-            && block.timestamp >= nextPlatformFeeNumeratorTimestamp,
+            nextPlatformFeeNumerator != 0 && nextPlatformFeeNumeratorTimestamp != 0
+                && block.timestamp >= nextPlatformFeeNumeratorTimestamp,
             "invalid timestamp or no new platform fee numerator confirmed"
         );
         require(
@@ -335,10 +320,7 @@ contract Controller is Governable {
     }
 
     function setNextImplementationDelay(uint256 _nextImplementationDelay) public onlyGovernance {
-        require(
-            _nextImplementationDelay > 0,
-            "invalid _nextImplementationDelay"
-        );
+        require(_nextImplementationDelay > 0, "invalid _nextImplementationDelay");
 
         tempNextImplementationDelay = _nextImplementationDelay;
         tempNextImplementationDelayTimestamp = block.timestamp + nextImplementationDelay;

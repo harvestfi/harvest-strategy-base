@@ -1,13 +1,11 @@
 // SPDX-License-Identifier: Unlicense
-pragma solidity 0.6.12;
-
+pragma solidity 0.8.21;
 
 /**
  * @dev A routing contract that is responsible for taking the harvested gains and routing them into FARM and additional
  *      buyback tokens for the corresponding strategy
  */
 interface IRewardForwarder {
-
     function store() external view returns (address);
 
     function governance() external view returns (address);
@@ -35,7 +33,7 @@ interface IRewardForwarder {
         uint256 _platformFee,
         address[] calldata _buybackTokens,
         uint256[] calldata _buybackAmounts
-    ) external returns (uint[] memory amounts);
+    ) external returns (uint256[] memory amounts);
 
     /**
      * @dev This function converts the fee amounts to the profit sharing token and sends them to the proper addresses
@@ -49,10 +47,6 @@ interface IRewardForwarder {
      * @param _platformFee      the amount of `_token` that will be sold into the profit sharing token for the Harvest
      *                          treasury
      */
-    function notifyFee(
-        address _token,
-        uint256 _profitSharingFee,
-        uint256 _strategistFee,
-        uint256 _platformFee
-    ) external;
+    function notifyFee(address _token, uint256 _profitSharingFee, uint256 _strategistFee, uint256 _platformFee)
+        external;
 }

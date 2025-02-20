@@ -1,10 +1,8 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity 0.6.12;
-
+pragma solidity 0.8.21;
 
 interface IERC4626 {
-
     // ========================= Events =========================
 
     /**
@@ -12,12 +10,7 @@ interface IERC4626 {
      *
      * MUST be emitted when tokens are deposited into the Vault via the mint and deposit methods.
      */
-    event Deposit(
-        address indexed sender,
-        address indexed receiver,
-        uint256 assets,
-        uint256 shares
-    );
+    event Deposit(address indexed sender, address indexed receiver, uint256 assets, uint256 shares);
 
     /**
      * Caller has exchanged shares, owned by owner, for assets, and transferred those assets to receiver.
@@ -25,11 +18,7 @@ interface IERC4626 {
      * MUST be emitted when shares are withdrawn from the Vault in ERC4626.redeem or ERC4626.withdraw methods.
      */
     event Withdraw(
-        address indexed sender,
-        address indexed receiver,
-        address indexed owner,
-        uint256 assets,
-        uint256 shares
+        address indexed sender, address indexed receiver, address indexed owner, uint256 assets, uint256 shares
     );
 
     // ========================= Functions =========================

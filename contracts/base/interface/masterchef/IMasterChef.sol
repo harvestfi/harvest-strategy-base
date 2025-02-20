@@ -1,6 +1,6 @@
 //SPDX-License-Identifier: Unlicense
 
-pragma solidity 0.6.12;
+pragma solidity 0.8.21;
 
 interface IMasterChef {
     function deposit(uint256 _pid, uint256 _amount) external;

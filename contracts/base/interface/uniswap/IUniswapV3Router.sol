@@ -1,9 +1,8 @@
 // SPDX-License-Identifier: Unlicense
-pragma solidity 0.6.12;
+pragma solidity 0.8.21;
 pragma experimental ABIEncoderV2;
 
 interface IUniswapV3Router {
-
     struct ExactInputSingleParams {
         address tokenIn;
         address tokenOut;

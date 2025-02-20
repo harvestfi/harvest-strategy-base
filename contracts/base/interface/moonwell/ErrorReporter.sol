@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: BSD-3-Clause
-pragma solidity 0.6.12;
+pragma solidity 0.8.21;
 
 contract ComptrollerErrorReporter {
     enum Error {
@@ -48,27 +48,28 @@ contract ComptrollerErrorReporter {
     }
 
     /**
-      * @dev `error` corresponds to enum Error; `info` corresponds to enum FailureInfo, and `detail` is an arbitrary
-      * contract-specific code that enables us to report opaque error codes from upgradeable contracts.
-      **/
-    event Failure(uint error, uint info, uint detail);
+     * @dev `error` corresponds to enum Error; `info` corresponds to enum FailureInfo, and `detail` is an arbitrary
+     * contract-specific code that enables us to report opaque error codes from upgradeable contracts.
+     *
+     */
+    event Failure(uint256 error, uint256 info, uint256 detail);
 
     /**
-      * @dev use this when reporting a known error from the money market or a non-upgradeable collaborator
-      */
-    function fail(Error err, FailureInfo info) internal returns (uint) {
-        emit Failure(uint(err), uint(info), 0);
+     * @dev use this when reporting a known error from the money market or a non-upgradeable collaborator
+     */
+    function fail(Error err, FailureInfo info) internal returns (uint256) {
+        emit Failure(uint256(err), uint256(info), 0);
 
-        return uint(err);
+        return uint256(err);
     }
 
     /**
-      * @dev use this when reporting an opaque error from an upgradeable collaborator contract
-      */
-    function failOpaque(Error err, FailureInfo info, uint opaqueError) internal returns (uint) {
-        emit Failure(uint(err), uint(info), opaqueError);
+     * @dev use this when reporting an opaque error from an upgradeable collaborator contract
+     */
+    function failOpaque(Error err, FailureInfo info, uint256 opaqueError) internal returns (uint256) {
+        emit Failure(uint256(err), uint256(info), opaqueError);
 
-        return uint(err);
+        return uint256(err);
     }
 }
 
@@ -187,26 +188,27 @@ contract TokenErrorReporter {
     }
 
     /**
-      * @dev `error` corresponds to enum Error; `info` corresponds to enum FailureInfo, and `detail` is an arbitrary
-      * contract-specific code that enables us to report opaque error codes from upgradeable contracts.
-      **/
-    event Failure(uint error, uint info, uint detail);
+     * @dev `error` corresponds to enum Error; `info` corresponds to enum FailureInfo, and `detail` is an arbitrary
+     * contract-specific code that enables us to report opaque error codes from upgradeable contracts.
+     *
+     */
+    event Failure(uint256 error, uint256 info, uint256 detail);
 
     /**
-      * @dev use this when reporting a known error from the money market or a non-upgradeable collaborator
-      */
-    function fail(Error err, FailureInfo info) internal returns (uint) {
-        emit Failure(uint(err), uint(info), 0);
+     * @dev use this when reporting a known error from the money market or a non-upgradeable collaborator
+     */
+    function fail(Error err, FailureInfo info) internal returns (uint256) {
+        emit Failure(uint256(err), uint256(info), 0);
 
-        return uint(err);
+        return uint256(err);
     }
 
     /**
-      * @dev use this when reporting an opaque error from an upgradeable collaborator contract
-      */
-    function failOpaque(Error err, FailureInfo info, uint opaqueError) internal returns (uint) {
-        emit Failure(uint(err), uint(info), opaqueError);
+     * @dev use this when reporting an opaque error from an upgradeable collaborator contract
+     */
+    function failOpaque(Error err, FailureInfo info, uint256 opaqueError) internal returns (uint256) {
+        emit Failure(uint256(err), uint256(info), opaqueError);
 
-        return uint(err);
+        return uint256(err);
     }
 }

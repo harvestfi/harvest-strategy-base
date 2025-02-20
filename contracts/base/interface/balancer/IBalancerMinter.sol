@@ -12,8 +12,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-pragma solidity 0.6.12;
-
+pragma solidity 0.8.21;
 
 /**
  * @dev Base minter interface, applicable to Mainnet minter or L2 pseudo minters.

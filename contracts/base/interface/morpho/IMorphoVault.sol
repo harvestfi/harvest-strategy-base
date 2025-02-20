@@ -1,5 +1,5 @@
 //SPDX-License-Identifier: Unlicense
-pragma solidity 0.6.12;
+pragma solidity 0.8.21;
 
 interface IMorphoVault {
     function deposit(uint256 assets, address receiver) external;

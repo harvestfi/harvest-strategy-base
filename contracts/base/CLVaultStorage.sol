@@ -1,10 +1,9 @@
 // SPDX-License-Identifier: Unlicense
-pragma solidity 0.6.12;
+pragma solidity 0.8.21;
 
 import "@openzeppelin/contracts-upgradeable/proxy/Initializable.sol";
 
 contract CLVaultStorage is Initializable {
-
     bytes32 internal constant _STRATEGY_SLOT = 0xf1a169aa0f736c2813818fdfbdc5755c31e0839c8f49831a16543496b28574ea;
     bytes32 internal constant _TOKEN0_SLOT = 0x79a9ec80eae65602abfc43e4e7c9bf1ac70bbea530cd445f041dff218e6fcc46;
     bytes32 internal constant _TOKEN1_SLOT = 0x212adbc75c59ced7d534d662f6756f8ca81c23dd71f420016802caeecf2b4480;
@@ -16,10 +15,13 @@ contract CLVaultStorage is Initializable {
     bytes32 internal constant _TICK_LOWER_SLOT = 0x97d0853e434cd90e097e89bd1e5df075d931c7dfc04cf142779986efce0ec1f9;
     bytes32 internal constant _TICK_SPACING_SLOT = 0xfa5cd416162d7465a01d1be89e13b1dabf1a47ae42a5bec0e3a9c815500f6eea;
     bytes32 internal constant _UNDERLYING_UNIT_SLOT = 0xa66bc57d4b4eed7c7687876ca77997588987307cb13ecc23f5e52725192e5fff;
-    bytes32 internal constant _NEXT_IMPLEMENTATION_SLOT = 0xb1acf527cd7cd1668b30e5a9a1c0d845714604de29ce560150922c9d8c0937df;
-    bytes32 internal constant _NEXT_IMPLEMENTATION_TIMESTAMP_SLOT = 0x3bc747f4b148b37be485de3223c90b4468252967d2ea7f9fcbd8b6e653f434c9;
+    bytes32 internal constant _NEXT_IMPLEMENTATION_SLOT =
+        0xb1acf527cd7cd1668b30e5a9a1c0d845714604de29ce560150922c9d8c0937df;
+    bytes32 internal constant _NEXT_IMPLEMENTATION_TIMESTAMP_SLOT =
+        0x3bc747f4b148b37be485de3223c90b4468252967d2ea7f9fcbd8b6e653f434c9;
     bytes32 internal constant _NEXT_STRATEGY_SLOT = 0xcd7bd9250b0e02f3b13eccf8c73ef5543cb618e0004628f9ca53b65fbdbde2d0;
-    bytes32 internal constant _NEXT_STRATEGY_TIMESTAMP_SLOT = 0x5d2b24811886ad126f78c499d71a932a5435795e4f2f6552f0900f12d663cdcf;
+    bytes32 internal constant _NEXT_STRATEGY_TIMESTAMP_SLOT =
+        0x5d2b24811886ad126f78c499d71a932a5435795e4f2f6552f0900f12d663cdcf;
     bytes32 internal constant _PAUSED_SLOT = 0xf1cf856d03630b74791fc293cfafd739932a5a075b02d357fb7a726a38777930;
 
     /**
@@ -42,18 +44,22 @@ contract CLVaultStorage is Initializable {
         assert(_TICK_SPACING_SLOT == bytes32(uint256(keccak256("eip1967.vaultStorage.tickSpacing")) - 1));
         assert(_UNDERLYING_UNIT_SLOT == bytes32(uint256(keccak256("eip1967.vaultStorage.underlyingUnit")) - 1));
         assert(_NEXT_IMPLEMENTATION_SLOT == bytes32(uint256(keccak256("eip1967.vaultStorage.nextImplementation")) - 1));
-        assert(_NEXT_IMPLEMENTATION_TIMESTAMP_SLOT == bytes32(uint256(keccak256("eip1967.vaultStorage.nextImplementationTimestamp")) - 1));
+        assert(
+            _NEXT_IMPLEMENTATION_TIMESTAMP_SLOT
+                == bytes32(uint256(keccak256("eip1967.vaultStorage.nextImplementationTimestamp")) - 1)
+        );
         assert(_NEXT_STRATEGY_SLOT == bytes32(uint256(keccak256("eip1967.vaultStorage.nextStrategy")) - 1));
-        assert(_NEXT_STRATEGY_TIMESTAMP_SLOT == bytes32(uint256(keccak256("eip1967.vaultStorage.nextStrategyTimestamp")) - 1));
+        assert(
+            _NEXT_STRATEGY_TIMESTAMP_SLOT
+                == bytes32(uint256(keccak256("eip1967.vaultStorage.nextStrategyTimestamp")) - 1)
+        );
         assert(_PAUSED_SLOT == bytes32(uint256(keccak256("eip1967.vaultStorage.paused")) - 1));
     }
 
-    function initialize(
-        uint256 _posID,
-        address _posManager,
-        uint256 _posWidth,
-        uint256 _targetWidth
-    ) public initializer {
+    function initialize(uint256 _posID, address _posManager, uint256 _posWidth, uint256 _targetWidth)
+        public
+        initializer
+    {
         _setPosId(_posID);
         _setPosManager(_posManager);
         _setPosWidth(_posWidth);

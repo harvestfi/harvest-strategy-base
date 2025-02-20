@@ -1,10 +1,10 @@
 //SPDX-License-Identifier: Unlicense
-pragma solidity 0.6.12;
+pragma solidity 0.8.21;
 
 interface Gauge {
-    function deposit(uint) external;
-    function balanceOf(address) external view returns (uint);
-    function withdraw(uint) external;
+    function deposit(uint256) external;
+    function balanceOf(address) external view returns (uint256);
+    function withdraw(uint256) external;
     function user_checkpoint(address) external;
     function claim_rewards() external;
     function bal_pseudo_minter() external view returns (address);

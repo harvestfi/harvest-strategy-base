@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: Unlicense
-pragma solidity 0.6.12;
+pragma solidity 0.8.21;
 
 interface ICLVault {
-
     function initializeVault(
         address _storage,
         uint256 _posId,
@@ -33,7 +32,7 @@ interface ICLVault {
 
     function tickUpper() external view returns (int24);
 
-    function underlyingUnit() external view returns (uint);
+    function underlyingUnit() external view returns (uint256);
 
     function strategy() external view returns (address);
 
@@ -41,15 +40,19 @@ interface ICLVault {
 
     function announceStrategyUpdate(address _strategy) external;
 
-    function deposit(uint256 _amount0, uint256 _amount1, uint256 _amountOutMin, address _receiver) external returns(uint256);
+    function deposit(uint256 _amount0, uint256 _amount1, uint256 _amountOutMin, address _receiver)
+        external
+        returns (uint256);
 
     function withdrawAll() external;
 
-    function withdraw(uint256 _numberOfShares, uint256 _amount0OutMin, uint256 _amount1OutMin) external returns(uint256, uint256);
+    function withdraw(uint256 _numberOfShares, uint256 _amount0OutMin, uint256 _amount1OutMin)
+        external
+        returns (uint256, uint256);
 
     function getPricePerFullShare() external view returns (uint256);
 
-    function underlyingBalanceWithInvestmentForHolder(address _holder) view external returns (uint256);
+    function underlyingBalanceWithInvestmentForHolder(address _holder) external view returns (uint256);
 
     function totalSupply() external view returns (uint256);
 
@@ -57,7 +60,7 @@ interface ICLVault {
      * This should be callable only by the controller (by the hard worker) or by governance
      */
     function doHardWork() external;
-    
+
     function getSqrtPriceX96() external view returns (uint160);
     function getCurrentTick() external view returns (int24);
     function inRange() external view returns (bool);

@@ -1,12 +1,11 @@
 // SPDX-License-Identifier: Unlicense
-pragma solidity 0.6.12;
+pragma solidity 0.8.21;
 
 interface IStrategy {
-
     /// @notice declared as public so child contract can call it
     function isUnsalvageableToken(address token) external view returns (bool);
 
-    function salvageToken(address recipient, address token, uint amount) external;
+    function salvageToken(address recipient, address token, uint256 amount) external;
 
     function governance() external view returns (address);
 

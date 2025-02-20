@@ -1,5 +1,5 @@
 //SPDX-License-Identifier: Unlicense
-pragma solidity 0.6.12;
+pragma solidity 0.8.21;
 
 interface IDex {
     function setFee(address token0, address token1, uint24 fee) external;

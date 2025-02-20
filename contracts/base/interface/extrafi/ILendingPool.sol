@@ -1,38 +1,23 @@
 // SPDX-License-Identifier: gpl-3.0
-pragma solidity 0.6.12;
+pragma solidity 0.8.21;
 pragma experimental ABIEncoderV2;
 
 import "./DataTypes.sol";
 
 interface ILendingPool {
-    function utilizationRateOfReserve(
-        uint256 reserveId
-    ) external view returns (uint256);
+    function utilizationRateOfReserve(uint256 reserveId) external view returns (uint256);
 
-    function borrowingRateOfReserve(
-        uint256 reserveId
-    ) external view returns (uint256);
+    function borrowingRateOfReserve(uint256 reserveId) external view returns (uint256);
 
-    function exchangeRateOfReserve(
-        uint256 reserveId
-    ) external view returns (uint256);
+    function exchangeRateOfReserve(uint256 reserveId) external view returns (uint256);
 
-    function totalLiquidityOfReserve(
-        uint256 reserveId
-    ) external view returns (uint256 totalLiquidity);
+    function totalLiquidityOfReserve(uint256 reserveId) external view returns (uint256 totalLiquidity);
 
-    function totalBorrowsOfReserve(
-        uint256 reserveId
-    ) external view returns (uint256 totalBorrows);
+    function totalBorrowsOfReserve(uint256 reserveId) external view returns (uint256 totalBorrows);
 
     function getReserveIdOfDebt(uint256 debtId) external view returns (uint256);
 
-    event InitReserve(
-        address indexed reserve,
-        address indexed eTokenAddress,
-        address stakingAddress,
-        uint256 id
-    );
+    event InitReserve(address indexed reserve, address indexed eTokenAddress, address stakingAddress, uint256 id);
     /**
      * @dev Emitted on deposit()
      * @param reserveId The id of the reserve
@@ -41,7 +26,8 @@ interface ILendingPool {
      * @param reserveAmount The reserve amount deposited
      * @param eTokenAmount The eToken amount received
      * @param referral The referral code used
-     **/
+     *
+     */
     event Deposited(
         uint256 indexed reserveId,
         address user,
@@ -58,7 +44,8 @@ interface ILendingPool {
      * @param to Address that will receive the underlying tokens
      * @param eTokenAmount The amount of eTokens to redeem
      * @param underlyingTokenAmount The amount of underlying tokens user received after redeem
-     **/
+     *
+     */
     event Redeemed(
         uint256 indexed reserveId,
         address indexed user,
@@ -73,12 +60,10 @@ interface ILendingPool {
      * @param contractAddress The address of the contract to initiate this borrow
      * @param onBehalfOf The beneficiary of the borrowing, receiving the tokens in his vaultPosition
      * @param amount The amount borrowed out
-     **/
+     *
+     */
     event Borrow(
-        uint256 indexed reserveId,
-        address indexed contractAddress,
-        address indexed onBehalfOf,
-        uint256 amount
+        uint256 indexed reserveId, address indexed contractAddress, address indexed onBehalfOf, uint256 amount
     );
 
     /**
@@ -87,13 +72,9 @@ interface ILendingPool {
      * @param onBehalfOf The user who repay debts in his vaultPosition
      * @param contractAddress The address of the contract to initiate this repay
      * @param amount The amount repaid
-     **/
-    event Repay(
-        uint256 indexed reserveId,
-        address indexed onBehalfOf,
-        address indexed contractAddress,
-        uint256 amount
-    );
+     *
+     */
+    event Repay(uint256 indexed reserveId, address indexed onBehalfOf, address indexed contractAddress, uint256 amount);
 
     /**
      * @dev Emitted when the pause is triggered.
@@ -105,21 +86,12 @@ interface ILendingPool {
      */
     event UnPaused();
 
-    event EnableVaultToBorrow(
-        uint256 indexed vaultId,
-        address indexed vaultAddress
-    );
+    event EnableVaultToBorrow(uint256 indexed vaultId, address indexed vaultAddress);
 
-    event DisableVaultToBorrow(
-        uint256 indexed vaultId,
-        address indexed vaultAddress
-    );
+    event DisableVaultToBorrow(uint256 indexed vaultId, address indexed vaultAddress);
 
     event SetCreditsOfVault(
-        uint256 indexed vaultId,
-        address indexed vaultAddress,
-        uint256 indexed reserveId,
-        uint256 credit
+        uint256 indexed vaultId, address indexed vaultAddress, uint256 indexed reserveId, uint256 credit
     );
 
     event SetInterestRateConfig(
@@ -161,14 +133,15 @@ interface ILendingPool {
         uint256 liquidity;
     }
 
-    function getReserveStatus(
-        uint256[] calldata reserveIdArr
-    ) external view returns (ReserveStatus[] memory statusArr);
+    function getReserveStatus(uint256[] calldata reserveIdArr)
+        external
+        view
+        returns (ReserveStatus[] memory statusArr);
 
-    function getPositionStatus(
-        uint256[] calldata reserveIdArr,
-        address user
-    ) external view returns (PositionStatus[] memory statusArr);
+    function getPositionStatus(uint256[] calldata reserveIdArr, address user)
+        external
+        view
+        returns (PositionStatus[] memory statusArr);
 
     /**
      * @dev Deposits an `amount` of underlying asset into the reserve, receiving in return overlying eTokens.
@@ -181,20 +154,17 @@ interface ILendingPool {
      *   is a different wallet
      * @param referralCode Code used to register the integrator originating the operation, for potential rewards.
      *   0 if the action is executed directly by the user, without any middle-man
-     **/
-    function deposit(
-        uint256 reserveId,
-        uint256 amount,
-        address onBehalfOf,
-        uint16 referralCode
-    ) external payable returns (uint256);
+     *
+     */
+    function deposit(uint256 reserveId, uint256 amount, address onBehalfOf, uint16 referralCode)
+        external
+        payable
+        returns (uint256);
 
-    function depositAndStake(
-        uint256 reserveId,
-        uint256 amount,
-        address onBehalfOf,
-        uint16 referralCode
-    ) external payable returns (uint256);
+    function depositAndStake(uint256 reserveId, uint256 amount, address onBehalfOf, uint16 referralCode)
+        external
+        payable
+        returns (uint256);
 
     /**
      * @dev User redeems eTokens in exchange for the underlying asset
@@ -208,26 +178,19 @@ interface ILendingPool {
      *   different wallet
      * @param receiveNativeETH If receive native ETH, set this param to true
      * @return The underlying token amount user finally receive
-     **/
-    function redeem(
-        uint256 reserveId,
-        uint256 eTokenAmount,
-        address to,
-        bool receiveNativeETH
-    ) external returns (uint256);
+     *
+     */
+    function redeem(uint256 reserveId, uint256 eTokenAmount, address to, bool receiveNativeETH)
+        external
+        returns (uint256);
 
-    function unStakeAndWithdraw(
-        uint256 reserveId,
-        uint256 eTokenAmount,
-        address to,
-        bool receiveNativeETH
-    ) external returns (uint256);
+    function unStakeAndWithdraw(uint256 reserveId, uint256 eTokenAmount, address to, bool receiveNativeETH)
+        external
+        returns (uint256);
 
     function newDebtPosition(uint256 reserveId) external returns (uint256);
 
-    function getCurrentDebt(
-        uint256 debtId
-    ) external view returns (uint256 currentDebt, uint256 latestBorrowingIndex);
+    function getCurrentDebt(uint256 debtId) external view returns (uint256 currentDebt, uint256 latestBorrowingIndex);
 
     /**
      * @dev Allows farming users to borrow a specific `amount` of the reserve underlying asset.
@@ -238,11 +201,7 @@ interface ILendingPool {
      * @param debtId The debtPositionId
      * @param amount The amount to be borrowed
      */
-    function borrow(
-        address onBehalfOf,
-        uint256 debtId,
-        uint256 amount
-    ) external;
+    function borrow(address onBehalfOf, uint256 debtId, uint256 amount) external;
 
     /**
      * @notice Repays borrowed underlying tokens to the reserve pool
@@ -252,28 +211,17 @@ interface ILendingPool {
      * @param debtId The debtPositionId
      * @param amount The amount to be borrowed
      * @return The final amount repaid
-     **/
-    function repay(
-        address onBehalfOf,
-        uint256 debtId,
-        uint256 amount
-    ) external returns (uint256);
+     *
+     */
+    function repay(address onBehalfOf, uint256 debtId, uint256 amount) external returns (uint256);
 
-    function getUnderlyingTokenAddress(
-        uint256 reserveId
-    ) external view returns (address underlyingTokenAddress);
+    function getUnderlyingTokenAddress(uint256 reserveId) external view returns (address underlyingTokenAddress);
 
-    function getETokenAddress(
-        uint256 reserveId
-    ) external view returns (address underlyingTokenAddress);
+    function getETokenAddress(uint256 reserveId) external view returns (address underlyingTokenAddress);
 
-    function getStakingAddress(
-        uint256 reserveId
-    ) external view returns (address);
+    function getStakingAddress(uint256 reserveId) external view returns (address);
 
-    function reserves(
-        uint256
-    )
+    function reserves(uint256)
         external
         view
         returns (

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Unlicense
-pragma solidity 0.6.12;
+pragma solidity 0.8.21;
 
 import "./interface/IERC4626.sol";
 import "./interface/ICLVault.sol";
@@ -19,22 +19,18 @@ contract CLWrapper is Controllable, ReentrancyGuard, IERC4626 {
     address internal _vault;
     address internal _asset;
 
-      // Only smart contracts will be affected by this modifier
+    // Only smart contracts will be affected by this modifier
     modifier defense() {
         require(
-        (msg.sender == tx.origin) ||                // If it is a normal user and not smart contract,
-                                                    // then the requirement will pass
-        !IController(controller()).greyList(msg.sender), // If it is a smart contract, then
-        "grey list"  // make sure that it is not on our greyList.
+            (msg.sender == tx.origin) // If it is a normal user and not smart contract,
+                    // then the requirement will pass
+                || !IController(controller()).greyList(msg.sender), // If it is a smart contract, then
+            "grey list" // make sure that it is not on our greyList.
         );
         _;
     }
 
-    constructor(
-        address _storage,
-        address __vault,
-        bool _useToken0
-    ) public Controllable(_storage) ReentrancyGuard() {
+    constructor(address _storage, address __vault, bool _useToken0) public Controllable(_storage) ReentrancyGuard() {
         _vault = __vault;
         _asset = _useToken0 ? ICLVault(_vault).token0() : ICLVault(_vault).token1();
     }
@@ -64,7 +60,7 @@ contract CLWrapper is Controllable, ReentrancyGuard, IERC4626 {
                 _totalAssets = amount0.mul(1e18).div(weight0);
             } else {
                 uint256 sqrtPrice = uint256(ICLVault(_vault).getSqrtPriceX96());
-                uint256 price0In1 = sqrtPrice.mul(sqrtPrice).mul(1e18).div(uint(2**(96 * 2)));
+                uint256 price0In1 = sqrtPrice.mul(sqrtPrice).mul(1e18).div(uint256(2 ** (96 * 2)));
                 uint256 price1In0 = uint256(1e36).div(price0In1);
                 _totalAssets = amount1.mul(price1In0).div(weight1);
             }
@@ -73,7 +69,7 @@ contract CLWrapper is Controllable, ReentrancyGuard, IERC4626 {
                 _totalAssets = amount1.mul(1e18).div(weight1);
             } else {
                 uint256 sqrtPrice = uint256(ICLVault(_vault).getSqrtPriceX96());
-                uint256 price0In1 = sqrtPrice.mul(sqrtPrice).mul(1e18).div(uint(2**(96 * 2)));
+                uint256 price0In1 = sqrtPrice.mul(sqrtPrice).mul(1e18).div(uint256(2 ** (96 * 2)));
                 _totalAssets = amount0.mul(price0In1).div(weight0);
             }
         }
@@ -88,8 +84,8 @@ contract CLWrapper is Controllable, ReentrancyGuard, IERC4626 {
         return totalAssets() * balanceOf(_depositor) / totalSupply();
     }
 
-    function maxDeposit(address /*caller*/) external view override returns (uint256) {
-        return uint(-1);
+    function maxDeposit(address /*caller*/ ) external view override returns (uint256) {
+        return uint256(-1);
     }
 
     function previewDeposit(uint256 _assets) public view override returns (uint256) {
@@ -102,13 +98,18 @@ contract CLWrapper is Controllable, ReentrancyGuard, IERC4626 {
         return shares;
     }
 
-    function deposit(uint256 _assets, address _receiver, uint256 _minOut) external nonReentrant defense returns (uint256) {
+    function deposit(uint256 _assets, address _receiver, uint256 _minOut)
+        external
+        nonReentrant
+        defense
+        returns (uint256)
+    {
         uint256 shares = _deposit(_assets, msg.sender, _receiver, _minOut);
         return shares;
     }
 
     function maxMint(address) external view override returns (uint256) {
-        return uint(0);
+        return uint256(0);
     }
 
     function previewMint(uint256) external view override returns (uint256) {
@@ -139,13 +140,24 @@ contract CLWrapper is Controllable, ReentrancyGuard, IERC4626 {
         return convertToAssets(_shares).mul(995).div(1000);
     }
 
-    function redeem(uint256 _shares, address _receiver, address _owner) external override nonReentrant defense returns (uint256) {
+    function redeem(uint256 _shares, address _receiver, address _owner)
+        external
+        override
+        nonReentrant
+        defense
+        returns (uint256)
+    {
         uint256 minOut = previewRedeem(_shares);
         uint256 assets = _withdraw(_shares, _receiver, _owner, minOut);
         return assets;
     }
 
-    function redeem(uint256 _shares, address _receiver, address _owner, uint256 _minOut) external nonReentrant defense returns (uint256) {
+    function redeem(uint256 _shares, address _receiver, address _owner, uint256 _minOut)
+        external
+        nonReentrant
+        defense
+        returns (uint256)
+    {
         uint256 assets = _withdraw(_shares, _receiver, _owner, _minOut);
         return assets;
     }
@@ -167,11 +179,14 @@ contract CLWrapper is Controllable, ReentrancyGuard, IERC4626 {
         IUniversalLiquidator(_universalLiquidator).swap(tokenIn, tokenOut, _amountIn, 1, address(this));
     }
 
-    function _deposit(uint256 _assets, address _sender, address _receiver, uint256 _minOut) internal returns (uint256) {
+    function _deposit(uint256 _assets, address _sender, address _receiver, uint256 _minOut)
+        internal
+        returns (uint256)
+    {
         IERC20(_asset).safeTransferFrom(_sender, address(this), _assets);
-        
+
         bool isToken0 = _asset == ICLVault(_vault).token0();
-        
+
         {
             (uint256 weight0, uint256 weight1) = ICLVault(_vault).getCurrentTokenWeights();
             if (isToken0) {
@@ -202,9 +217,12 @@ contract CLWrapper is Controllable, ReentrancyGuard, IERC4626 {
         return amountOut;
     }
 
-    function _withdraw(uint256 _shares, address _receiver, address _owner, uint256 _minOut) internal returns (uint256) {
+    function _withdraw(uint256 _shares, address _receiver, address _owner, uint256 _minOut)
+        internal
+        returns (uint256)
+    {
         IERC20(_vault).safeTransferFrom(_owner, address(this), _shares);
-        
+
         address token0 = ICLVault(_vault).token0();
         address token1 = ICLVault(_vault).token1();
         bool isToken0 = _asset == token0;
@@ -220,7 +238,7 @@ contract CLWrapper is Controllable, ReentrancyGuard, IERC4626 {
         uint256 amountOut = IERC20(_asset).balanceOf(address(this));
 
         require(amountOut >= _minOut, "Too little received");
-        
+
         emit Withdraw(msg.sender, _receiver, _owner, amountOut, _shares);
         _transferLeftOverTo(_receiver);
         return amountOut;

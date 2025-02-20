@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: BUSL-1.1
-pragma solidity 0.6.12;
+pragma solidity 0.8.21;
 pragma experimental ABIEncoderV2;
 
 /**
@@ -10,8 +10,9 @@ pragma experimental ABIEncoderV2;
 interface ICometRewards {
     struct RewardOwed {
         address token;
-        uint owed;
+        uint256 owed;
     }
+
     function claim(address comet, address src, bool accrue) external;
     function getRewardOwed(address comet, address account) external returns (RewardOwed memory);
 }

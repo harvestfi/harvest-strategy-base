@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: gpl-3.0
-pragma solidity 0.6.12;
+pragma solidity 0.8.21;
 
 library DataTypes {
     struct DebtPositionData {

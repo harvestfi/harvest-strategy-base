@@ -1,11 +1,10 @@
 // SPDX-License-Identifier: Unlicense
-pragma solidity 0.6.12;
+pragma solidity 0.8.21;
 
 import "./interface/IERC4626.sol";
 import "./VaultV1.sol";
 
 contract VaultV2 is IERC4626, VaultV1 {
-
     /// By default, the constant `10` is a uint8. This implicitly converts it to `uint256`
     uint256 public constant TEN = 10;
 
@@ -25,8 +24,8 @@ contract VaultV2 is IERC4626, VaultV1 {
         return totalAssets() * balanceOf(_depositor) / totalSupply();
     }
 
-    function maxDeposit(address /*caller*/) public view override returns (uint256) {
-        return uint(-1);
+    function maxDeposit(address /*caller*/ ) public view override returns (uint256) {
+        return uint256(-1);
     }
 
     function previewDeposit(uint256 _assets) public view override returns (uint256) {
@@ -38,8 +37,8 @@ contract VaultV2 is IERC4626, VaultV1 {
         return shares;
     }
 
-    function maxMint(address /*caller*/) public view override returns (uint256) {
-        return uint(-1);
+    function maxMint(address /*caller*/ ) public view override returns (uint256) {
+        return uint256(-1);
     }
 
     function previewMint(uint256 _shares) public view override returns (uint256) {
@@ -47,7 +46,7 @@ contract VaultV2 is IERC4626, VaultV1 {
     }
 
     function mint(uint256 _shares, address _receiver) public override nonReentrant defense returns (uint256) {
-        uint assets = convertToAssets(_shares);
+        uint256 assets = convertToAssets(_shares);
         _deposit(assets, msg.sender, _receiver);
         return assets;
     }
@@ -60,15 +59,13 @@ contract VaultV2 is IERC4626, VaultV1 {
         return convertToShares(_assets);
     }
 
-    function withdraw(
-        uint256 _assets,
-        address _receiver,
-        address _owner
-    )
-    public override
-    nonReentrant
-    defense
-    returns (uint256) {
+    function withdraw(uint256 _assets, address _receiver, address _owner)
+        public
+        override
+        nonReentrant
+        defense
+        returns (uint256)
+    {
         uint256 shares = convertToShares(_assets);
         _withdraw(shares, _receiver, _owner);
         return shares;
@@ -82,15 +79,13 @@ contract VaultV2 is IERC4626, VaultV1 {
         return convertToAssets(_shares);
     }
 
-    function redeem(
-        uint256 _shares,
-        address _receiver,
-        address _owner
-    )
-    public override
-    nonReentrant
-    defense
-    returns (uint256) {
+    function redeem(uint256 _shares, address _receiver, address _owner)
+        public
+        override
+        nonReentrant
+        defense
+        returns (uint256)
+    {
         uint256 assets = _withdraw(_shares, _receiver, _owner);
         return assets;
     }
