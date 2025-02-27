@@ -3,8 +3,8 @@ pragma solidity 0.8.26;
 
 /// @title ConstantsLib
 /// @author Harvest Community Foundation
-/// @notice Library exposing constants.
-library ConstantsLib {
+/// @notice Library exposing constants in the MorphoLoopingStrategy(MLS).
+library MLSConstantsLib {
     /// @dev The address of the WETH token.
     address internal constant WETH = address(0x4200000000000000000000000000000000000006);
 
