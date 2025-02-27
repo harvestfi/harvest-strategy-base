@@ -5,7 +5,7 @@ import {ControllableInit} from "../../../base/inheritance/ControllableInit.sol";
 import {MLSConstantsLib} from "../libraries/MLSConstantsLib.sol";
 import {Checks} from "./Checks.sol";
 
-abstract contract Setters is ControllableInit, Checks {
+abstract contract StateSetter is ControllableInit, Checks {
     function _setMToken(address _target) internal {
         setAddress(MLSConstantsLib.MTOKEN_SLOT, _target);
     }

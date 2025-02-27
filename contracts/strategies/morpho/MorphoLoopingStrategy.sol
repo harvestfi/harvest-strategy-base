@@ -12,12 +12,12 @@ import "../../base/interface/balancer/IBVault.sol";
 import "../../base/interface/weth/IWETH.sol";
 
 import {Helpers} from "./utils/Helpers.sol";
-import {Setters} from "./utils/Setters.sol";
+import {StateSetter} from "./utils/StateSetter.sol";
 import {Checks} from "./utils/Checks.sol";
 import {MLSConstantsLib} from "./libraries/MLSConstantsLib.sol";
 import {ErrorsLib} from "./libraries/ErrorsLib.sol";
 
-contract MorphoLoopingStrategy is BaseUpgradeableStrategy, Helpers, Setters {
+contract MorphoLoopingStrategy is BaseUpgradeableStrategy, Helpers, StateSetter {
     using SafeERC20 for IERC20;
 
     uint256 public suppliedInUnderlying;
