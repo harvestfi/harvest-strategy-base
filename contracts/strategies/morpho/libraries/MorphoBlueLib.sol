@@ -17,7 +17,7 @@ import {MathLib} from "@morpho-org/morpho-blue/src/libraries/MathLib.sol";
 import {SharesMathLib} from "@morpho-org/morpho-blue/src/libraries/SharesMathLib.sol";
 
 import {ORACLE_PRICE_SCALE} from "@morpho-org/morpho-blue/src/libraries/ConstantsLib.sol";
-import {ConstantsLib} from "./ConstantsLib.sol";
+import {MLSConstantsLib} from "./MLSConstantsLib.sol";
 
 /// @title Morpho Blue Snippets
 /// @author Morpho Labs
@@ -43,7 +43,7 @@ library MorphoBlueSnippets {
         returns (uint256 supplyApy)
     {
         (uint256 totalSupplyAssets,, uint256 totalBorrowAssets,) =
-            IMorpho(ConstantsLib.MORPHO_BLUE).expectedMarketBalances(marketParams);
+            IMorpho(MLSConstantsLib.MORPHO_BLUE).expectedMarketBalances(marketParams);
 
         // Get the borrow rate
         if (marketParams.irm != address(0)) {
@@ -75,7 +75,7 @@ library MorphoBlueSnippets {
         view
         returns (uint256 totalSupplyAssets)
     {
-        totalSupplyAssets = IMorpho(ConstantsLib.MORPHO_BLUE).expectedSupplyAssets(marketParams, user);
+        totalSupplyAssets = IMorpho(MLSConstantsLib.MORPHO_BLUE).expectedSupplyAssets(marketParams, user);
     }
 
     /// @notice Calculates the total borrow balance of a given user in a specific market.
@@ -87,7 +87,7 @@ library MorphoBlueSnippets {
         view
         returns (uint256 totalBorrowAssets)
     {
-        totalBorrowAssets = IMorpho(ConstantsLib.MORPHO_BLUE).expectedBorrowAssets(marketParams, user);
+        totalBorrowAssets = IMorpho(MLSConstantsLib.MORPHO_BLUE).expectedBorrowAssets(marketParams, user);
     }
 
     /// @notice Calculates the total collateral balance of a given user in a specific market.
@@ -98,7 +98,7 @@ library MorphoBlueSnippets {
     function collateralAssetsUser(Id marketId, address user) public view returns (uint256 totalCollateralAssets) {
         bytes32[] memory slots = new bytes32[](1);
         slots[0] = MorphoStorageLib.positionBorrowSharesAndCollateralSlot(marketId, user);
-        bytes32[] memory values = IMorpho(ConstantsLib.MORPHO_BLUE).extSloads(slots);
+        bytes32[] memory values = IMorpho(MLSConstantsLib.MORPHO_BLUE).extSloads(slots);
         totalCollateralAssets = uint256(values[0] >> 128);
     }
 
@@ -106,14 +106,14 @@ library MorphoBlueSnippets {
     /// @param marketParams The parameters of the market.
     /// @return totalSupplyAssets The calculated total supply of assets.
     function marketTotalSupply(MarketParams memory marketParams) public view returns (uint256 totalSupplyAssets) {
-        totalSupplyAssets = IMorpho(ConstantsLib.MORPHO_BLUE).expectedTotalSupplyAssets(marketParams);
+        totalSupplyAssets = IMorpho(MLSConstantsLib.MORPHO_BLUE).expectedTotalSupplyAssets(marketParams);
     }
 
     /// @notice Calculates the total borrow of assets in a specific market.
     /// @param marketParams The parameters of the market.
     /// @return totalBorrowAssets The calculated total borrow of assets.
     function marketTotalBorrow(MarketParams memory marketParams) public view returns (uint256 totalBorrowAssets) {
-        totalBorrowAssets = IMorpho(ConstantsLib.MORPHO_BLUE).expectedTotalBorrowAssets(marketParams);
+        totalBorrowAssets = IMorpho(MLSConstantsLib.MORPHO_BLUE).expectedTotalBorrowAssets(marketParams);
     }
 
     /// @notice Calculates the health factor of a user in a specific market.
@@ -127,8 +127,8 @@ library MorphoBlueSnippets {
         returns (uint256 healthFactor)
     {
         uint256 collateralPrice = IOracle(marketParams.oracle).price();
-        uint256 collateral = IMorpho(ConstantsLib.MORPHO_BLUE).collateral(id, user);
-        uint256 borrowed = IMorpho(ConstantsLib.MORPHO_BLUE).expectedBorrowAssets(marketParams, user);
+        uint256 collateral = IMorpho(MLSConstantsLib.MORPHO_BLUE).collateral(id, user);
+        uint256 borrowed = IMorpho(MLSConstantsLib.MORPHO_BLUE).expectedBorrowAssets(marketParams, user);
 
         uint256 maxBorrow = collateral.mulDivDown(collateralPrice, ORACLE_PRICE_SCALE).wMulDown(marketParams.lltv);
 
@@ -147,26 +147,26 @@ library MorphoBlueSnippets {
         external
         returns (uint256 assetsSupplied, uint256 sharesSupplied)
     {
-        ERC20(marketParams.loanToken).forceApprove(address(ConstantsLib.MORPHO_BLUE), type(uint256).max);
+        ERC20(marketParams.loanToken).forceApprove(address(MLSConstantsLib.MORPHO_BLUE), type(uint256).max);
         ERC20(marketParams.loanToken).safeTransferFrom(msg.sender, address(this), amount);
 
         uint256 shares;
         address onBehalf = msg.sender;
 
         (assetsSupplied, sharesSupplied) =
-            IMorpho(ConstantsLib.MORPHO_BLUE).supply(marketParams, amount, shares, onBehalf, hex"");
+            IMorpho(MLSConstantsLib.MORPHO_BLUE).supply(marketParams, amount, shares, onBehalf, hex"");
     }
 
     /// @notice Handles the supply of collateral by the caller to a specific market.
     /// @param marketParams The parameters of the market.
     /// @param amount The amount of collateral the user is supplying.
     function supplyCollateral(MarketParams memory marketParams, uint256 amount) external {
-        ERC20(marketParams.collateralToken).forceApprove(address(ConstantsLib.MORPHO_BLUE), type(uint256).max);
+        ERC20(marketParams.collateralToken).forceApprove(address(MLSConstantsLib.MORPHO_BLUE), type(uint256).max);
         ERC20(marketParams.collateralToken).safeTransferFrom(msg.sender, address(this), amount);
 
         address onBehalf = msg.sender;
 
-        IMorpho(ConstantsLib.MORPHO_BLUE).supplyCollateral(marketParams, amount, onBehalf, hex"");
+        IMorpho(MLSConstantsLib.MORPHO_BLUE).supplyCollateral(marketParams, amount, onBehalf, hex"");
     }
 
     /// @notice Handles the withdrawal of collateral by the caller from a specific market of a specific amount.
@@ -176,7 +176,7 @@ library MorphoBlueSnippets {
         address onBehalf = msg.sender;
         address receiver = msg.sender;
 
-        IMorpho(ConstantsLib.MORPHO_BLUE).withdrawCollateral(marketParams, amount, onBehalf, receiver);
+        IMorpho(MLSConstantsLib.MORPHO_BLUE).withdrawCollateral(marketParams, amount, onBehalf, receiver);
     }
 
     /// @notice Handles the withdrawal of a specified amount of assets by the caller from a specific market.
@@ -193,7 +193,7 @@ library MorphoBlueSnippets {
         address receiver = msg.sender;
 
         (assetsWithdrawn, sharesWithdrawn) =
-            IMorpho(ConstantsLib.MORPHO_BLUE).withdraw(marketParams, amount, shares, onBehalf, receiver);
+            IMorpho(MLSConstantsLib.MORPHO_BLUE).withdraw(marketParams, amount, shares, onBehalf, receiver);
     }
 
     /// @notice Handles the withdrawal of 50% of the assets by the caller from a specific market.
@@ -205,7 +205,7 @@ library MorphoBlueSnippets {
         returns (uint256 assetsWithdrawn, uint256 sharesWithdrawn)
     {
         Id marketId = marketParams.id();
-        uint256 supplyShares = IMorpho(ConstantsLib.MORPHO_BLUE).position(marketId, msg.sender).supplyShares;
+        uint256 supplyShares = IMorpho(MLSConstantsLib.MORPHO_BLUE).position(marketId, msg.sender).supplyShares;
         uint256 amount;
         uint256 shares = supplyShares / 2;
 
@@ -213,7 +213,7 @@ library MorphoBlueSnippets {
         address receiver = msg.sender;
 
         (assetsWithdrawn, sharesWithdrawn) =
-            IMorpho(ConstantsLib.MORPHO_BLUE).withdraw(marketParams, amount, shares, onBehalf, receiver);
+            IMorpho(MLSConstantsLib.MORPHO_BLUE).withdraw(marketParams, amount, shares, onBehalf, receiver);
     }
 
     /// @notice Handles the withdrawal of all the assets by the caller from a specific market.
@@ -225,14 +225,14 @@ library MorphoBlueSnippets {
         returns (uint256 assetsWithdrawn, uint256 sharesWithdrawn)
     {
         Id marketId = marketParams.id();
-        uint256 supplyShares = IMorpho(ConstantsLib.MORPHO_BLUE).position(marketId, msg.sender).supplyShares;
+        uint256 supplyShares = IMorpho(MLSConstantsLib.MORPHO_BLUE).position(marketId, msg.sender).supplyShares;
         uint256 amount;
 
         address onBehalf = msg.sender;
         address receiver = msg.sender;
 
         (assetsWithdrawn, sharesWithdrawn) =
-            IMorpho(ConstantsLib.MORPHO_BLUE).withdraw(marketParams, amount, supplyShares, onBehalf, receiver);
+            IMorpho(MLSConstantsLib.MORPHO_BLUE).withdraw(marketParams, amount, supplyShares, onBehalf, receiver);
     }
 
     /// @notice Handles the withdrawal of a specified amount of assets by the caller from a specific market. If the
@@ -250,19 +250,19 @@ library MorphoBlueSnippets {
         address onBehalf = msg.sender;
         address receiver = msg.sender;
 
-        IMorpho(ConstantsLib.MORPHO_BLUE).accrueInterest(marketParams);
-        uint256 totalSupplyAssets = IMorpho(ConstantsLib.MORPHO_BLUE).totalSupplyAssets(id);
-        uint256 totalSupplyShares = IMorpho(ConstantsLib.MORPHO_BLUE).totalSupplyShares(id);
-        uint256 shares = IMorpho(ConstantsLib.MORPHO_BLUE).supplyShares(id, msg.sender);
+        IMorpho(MLSConstantsLib.MORPHO_BLUE).accrueInterest(marketParams);
+        uint256 totalSupplyAssets = IMorpho(MLSConstantsLib.MORPHO_BLUE).totalSupplyAssets(id);
+        uint256 totalSupplyShares = IMorpho(MLSConstantsLib.MORPHO_BLUE).totalSupplyShares(id);
+        uint256 shares = IMorpho(MLSConstantsLib.MORPHO_BLUE).supplyShares(id, msg.sender);
 
         uint256 assetsMax = shares.toAssetsDown(totalSupplyAssets, totalSupplyShares);
 
         if (amount >= assetsMax) {
             (assetsWithdrawn, sharesWithdrawn) =
-                IMorpho(ConstantsLib.MORPHO_BLUE).withdraw(marketParams, 0, shares, onBehalf, receiver);
+                IMorpho(MLSConstantsLib.MORPHO_BLUE).withdraw(marketParams, 0, shares, onBehalf, receiver);
         } else {
             (assetsWithdrawn, sharesWithdrawn) =
-                IMorpho(ConstantsLib.MORPHO_BLUE).withdraw(marketParams, amount, 0, onBehalf, receiver);
+                IMorpho(MLSConstantsLib.MORPHO_BLUE).withdraw(marketParams, amount, 0, onBehalf, receiver);
         }
     }
 
@@ -280,7 +280,7 @@ library MorphoBlueSnippets {
         address receiver = msg.sender;
 
         (assetsBorrowed, sharesBorrowed) =
-            IMorpho(ConstantsLib.MORPHO_BLUE).borrow(marketParams, amount, shares, onBehalf, receiver);
+            IMorpho(MLSConstantsLib.MORPHO_BLUE).borrow(marketParams, amount, shares, onBehalf, receiver);
     }
 
     /// @notice Handles the repayment of a specified amount of assets by the caller to a specific market.
@@ -292,13 +292,13 @@ library MorphoBlueSnippets {
         external
         returns (uint256 assetsRepaid, uint256 sharesRepaid)
     {
-        ERC20(marketParams.loanToken).forceApprove(address(ConstantsLib.MORPHO_BLUE), type(uint256).max);
+        ERC20(marketParams.loanToken).forceApprove(address(MLSConstantsLib.MORPHO_BLUE), type(uint256).max);
         ERC20(marketParams.loanToken).safeTransferFrom(msg.sender, address(this), amount);
 
         uint256 shares;
         address onBehalf = msg.sender;
         (assetsRepaid, sharesRepaid) =
-            IMorpho(ConstantsLib.MORPHO_BLUE).repay(marketParams, amount, shares, onBehalf, hex"");
+            IMorpho(MLSConstantsLib.MORPHO_BLUE).repay(marketParams, amount, shares, onBehalf, hex"");
     }
 
     /// @notice Handles the repayment of 50% of the borrowed assets by the caller to a specific market.
@@ -309,13 +309,13 @@ library MorphoBlueSnippets {
         external
         returns (uint256 assetsRepaid, uint256 sharesRepaid)
     {
-        ERC20(marketParams.loanToken).forceApprove(address(ConstantsLib.MORPHO_BLUE), type(uint256).max);
+        ERC20(marketParams.loanToken).forceApprove(address(MLSConstantsLib.MORPHO_BLUE), type(uint256).max);
 
         Id marketId = marketParams.id();
 
         (,, uint256 totalBorrowAssets, uint256 totalBorrowShares) =
-            IMorpho(ConstantsLib.MORPHO_BLUE).expectedMarketBalances(marketParams);
-        uint256 borrowShares = IMorpho(ConstantsLib.MORPHO_BLUE).position(marketId, msg.sender).borrowShares;
+            IMorpho(MLSConstantsLib.MORPHO_BLUE).expectedMarketBalances(marketParams);
+        uint256 borrowShares = IMorpho(MLSConstantsLib.MORPHO_BLUE).position(marketId, msg.sender).borrowShares;
 
         uint256 repaidAmount = (borrowShares / 2).toAssetsUp(totalBorrowAssets, totalBorrowShares);
         ERC20(marketParams.loanToken).safeTransferFrom(msg.sender, address(this), repaidAmount);
@@ -324,7 +324,7 @@ library MorphoBlueSnippets {
         address onBehalf = msg.sender;
 
         (assetsRepaid, sharesRepaid) =
-            IMorpho(ConstantsLib.MORPHO_BLUE).repay(marketParams, amount, borrowShares / 2, onBehalf, hex"");
+            IMorpho(MLSConstantsLib.MORPHO_BLUE).repay(marketParams, amount, borrowShares / 2, onBehalf, hex"");
     }
 
     /// @notice Handles the repayment of all the borrowed assets by the caller to a specific market.
@@ -332,13 +332,13 @@ library MorphoBlueSnippets {
     /// @return assetsRepaid The actual amount of assets repaid.
     /// @return sharesRepaid The shares repaid in return for the assets.
     function repayAll(MarketParams memory marketParams) external returns (uint256 assetsRepaid, uint256 sharesRepaid) {
-        ERC20(marketParams.loanToken).forceApprove(address(ConstantsLib.MORPHO_BLUE), type(uint256).max);
+        ERC20(marketParams.loanToken).forceApprove(address(MLSConstantsLib.MORPHO_BLUE), type(uint256).max);
 
         Id marketId = marketParams.id();
 
         (,, uint256 totalBorrowAssets, uint256 totalBorrowShares) =
-            IMorpho(ConstantsLib.MORPHO_BLUE).expectedMarketBalances(marketParams);
-        uint256 borrowShares = IMorpho(ConstantsLib.MORPHO_BLUE).position(marketId, msg.sender).borrowShares;
+            IMorpho(MLSConstantsLib.MORPHO_BLUE).expectedMarketBalances(marketParams);
+        uint256 borrowShares = IMorpho(MLSConstantsLib.MORPHO_BLUE).position(marketId, msg.sender).borrowShares;
 
         uint256 repaidAmount = borrowShares.toAssetsUp(totalBorrowAssets, totalBorrowShares);
         ERC20(marketParams.loanToken).safeTransferFrom(msg.sender, address(this), repaidAmount);
@@ -346,7 +346,7 @@ library MorphoBlueSnippets {
         uint256 amount;
         address onBehalf = msg.sender;
         (assetsRepaid, sharesRepaid) =
-            IMorpho(ConstantsLib.MORPHO_BLUE).repay(marketParams, amount, borrowShares, onBehalf, hex"");
+            IMorpho(MLSConstantsLib.MORPHO_BLUE).repay(marketParams, amount, borrowShares, onBehalf, hex"");
     }
 
     /// @notice Handles the repayment of a specified amount of assets by the caller to a specific market. If the amount
@@ -359,26 +359,26 @@ library MorphoBlueSnippets {
         external
         returns (uint256 assetsRepaid, uint256 sharesRepaid)
     {
-        ERC20(marketParams.loanToken).forceApprove(address(ConstantsLib.MORPHO_BLUE), type(uint256).max);
+        ERC20(marketParams.loanToken).forceApprove(address(MLSConstantsLib.MORPHO_BLUE), type(uint256).max);
 
         Id id = marketParams.id();
 
         address onBehalf = msg.sender;
 
-        IMorpho(ConstantsLib.MORPHO_BLUE).accrueInterest(marketParams);
-        uint256 totalBorrowAssets = IMorpho(ConstantsLib.MORPHO_BLUE).totalBorrowAssets(id);
-        uint256 totalBorrowShares = IMorpho(ConstantsLib.MORPHO_BLUE).totalBorrowShares(id);
-        uint256 shares = IMorpho(ConstantsLib.MORPHO_BLUE).borrowShares(id, msg.sender);
+        IMorpho(MLSConstantsLib.MORPHO_BLUE).accrueInterest(marketParams);
+        uint256 totalBorrowAssets = IMorpho(MLSConstantsLib.MORPHO_BLUE).totalBorrowAssets(id);
+        uint256 totalBorrowShares = IMorpho(MLSConstantsLib.MORPHO_BLUE).totalBorrowShares(id);
+        uint256 shares = IMorpho(MLSConstantsLib.MORPHO_BLUE).borrowShares(id, msg.sender);
         uint256 assetsMax = shares.toAssetsUp(totalBorrowAssets, totalBorrowShares);
 
         if (amount >= assetsMax) {
             ERC20(marketParams.loanToken).safeTransferFrom(msg.sender, address(this), assetsMax);
             (assetsRepaid, sharesRepaid) =
-                IMorpho(ConstantsLib.MORPHO_BLUE).repay(marketParams, 0, shares, onBehalf, hex"");
+                IMorpho(MLSConstantsLib.MORPHO_BLUE).repay(marketParams, 0, shares, onBehalf, hex"");
         } else {
             ERC20(marketParams.loanToken).safeTransferFrom(msg.sender, address(this), amount);
             (assetsRepaid, sharesRepaid) =
-                IMorpho(ConstantsLib.MORPHO_BLUE).repay(marketParams, amount, 0, onBehalf, hex"");
+                IMorpho(MLSConstantsLib.MORPHO_BLUE).repay(marketParams, amount, 0, onBehalf, hex"");
         }
     }
 }
