@@ -19,6 +19,20 @@ library MLSConstantsLib {
     /// @dev The address of the Morpho Blue contract.
     address internal constant MORPHO_BLUE = address(0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb);
 
+    /// @dev The slot of the loan token.
+    bytes32 internal constant LOAN_TOKEN_SLOT = 0x7ce29ca599ec4a5f9fb8fb07213532368fc685cbc286b763d4cfaf236287c015;
+
+    /// @dev The slot of the oracle.
+    bytes32 internal constant ORACLE_SLOT = 0xa9fe60782b14a01d25885c070d2fff6c0854cc3765300f7c79a8e8b9792c55bb;
+
+    /// @dev The slot of the IRM(Interest Rate Models).
+    bytes32 internal constant IRM_SLOT = 0xf506d3a83fcfb2893f5b546f4c872321227a32e7cd6dd056b03f999d33e3c982;
+
+    /// @dev The slot of the LLTV(Liq. Loan-To-Value).
+    bytes32 internal constant LLTV_SLOT = 0x3026ff2a3e1d5bc232fbed88c368457106225b498851d320cb4714f4c01a49aa;
+
+    /* MOONWELL */
+
     /// @dev The slot of the mToken.
     bytes32 internal constant MTOKEN_SLOT = 0x21e6ad38ea5ca89af03560d16f1da9e505dccbd1ec61d0683be425888164fec3;
 

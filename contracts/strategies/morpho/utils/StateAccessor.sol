@@ -5,6 +5,26 @@ import {MLSConstantsLib} from "../libraries/MLSConstantsLib.sol";
 import {BaseUpgradeableStrategyStorage} from "../../../base/upgradability/BaseUpgradeableStrategyStorage.sol";
 
 abstract contract StateAccessor is BaseUpgradeableStrategyStorage {
+    /* MORPHO */
+
+    function getLoanToken() public view returns (address) {
+        return getAddress(MLSConstantsLib.LOAN_TOKEN_SLOT);
+    }
+
+    function getOracle() public view returns (address) {
+        return getAddress(MLSConstantsLib.ORACLE_SLOT);
+    }
+
+    function getIRM() public view returns (address) {
+        return getAddress(MLSConstantsLib.IRM_SLOT);
+    }
+
+    function getLLTV() public view returns (uint256) {
+        return getUint256(MLSConstantsLib.LLTV_SLOT);
+    }
+
+    /* MOONWELL */
+
     function getMToken() public view returns (address) {
         return getAddress(MLSConstantsLib.MTOKEN_SLOT);
     }

@@ -5,6 +5,22 @@ pragma solidity 0.8.26;
 /// @author Harvest Community Foundation
 /// @notice Library exposing error messages.
 library ErrorsLib {
+    /* MORPHO */
+
+    /// @notice Error message for when the loan token slot is not correct.
+    error LOAN_TOKEN_SLOT_NOT_CORRECT();
+
+    /// @notice Error message for when the oracle slot is not correct.
+    error ORACLE_SLOT_NOT_CORRECT();
+
+    /// @notice Error message for when the IRM slot is not correct.
+    error IRM_SLOT_NOT_CORRECT();
+
+    /// @notice Error message for when the LLTV slot is not correct.
+    error LLTV_SLOT_NOT_CORRECT();
+
+    /* MOONWELL */
+
     /// @notice Error message for when the mToken slot is not correct.
     error MTOKEN_SLOT_NOT_CORRECT();
 
