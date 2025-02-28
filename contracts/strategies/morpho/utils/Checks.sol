@@ -5,10 +5,7 @@ import {StateAccessor} from "./StateAccessor.sol";
 
 abstract contract Checks is StateAccessor {
     function unsalvagableTokens(address token) public view returns (bool) {
-        return (
-            token == rewardToken() || token == underlying()
-                || token == getMToken()
-        );
+        return (token == rewardToken() || token == underlying() || token == getMToken());
     }
 
     function depositArbCheck() public pure returns (bool) {
