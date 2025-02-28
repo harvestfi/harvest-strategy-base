@@ -16,8 +16,10 @@ import {StateSetter} from "./utils/StateSetter.sol";
 import {Checks} from "./utils/Checks.sol";
 import {MLSConstantsLib} from "./libraries/MLSConstantsLib.sol";
 import {ErrorsLib} from "./libraries/ErrorsLib.sol";
+import {MorphoBlueSnippets} from "./libraries/MorphoBlueLib.sol";
+import {MorphoOps} from "./utils/MorphoOps.sol";
 
-contract MorphoLoopingStrategy is BaseUpgradeableStrategy, Helpers, StateSetter {
+contract MorphoLoopingStrategy is BaseUpgradeableStrategy, Helpers, MorphoOps, StateSetter {
     using SafeERC20 for IERC20;
 
     uint256 public suppliedInUnderlying;
@@ -30,6 +32,22 @@ contract MorphoLoopingStrategy is BaseUpgradeableStrategy, Helpers, StateSetter 
     address[] public rewardTokens;
 
     constructor() BaseUpgradeableStrategy() {
+        if (MLSConstantsLib.LOAN_TOKEN_SLOT != bytes32(uint256(keccak256("eip1967.strategyStorage.loanToken")) - 1)) {
+            revert ErrorsLib.LOAN_TOKEN_SLOT_NOT_CORRECT();
+        }
+
+        if (MLSConstantsLib.ORACLE_SLOT != bytes32(uint256(keccak256("eip1967.strategyStorage.oracle")) - 1)) {
+            revert ErrorsLib.ORACLE_SLOT_NOT_CORRECT();
+        }
+
+        if (MLSConstantsLib.IRM_SLOT != bytes32(uint256(keccak256("eip1967.strategyStorage.irm")) - 1)) {
+            revert ErrorsLib.IRM_SLOT_NOT_CORRECT();
+        }
+
+        if (MLSConstantsLib.LLTV_SLOT != bytes32(uint256(keccak256("eip1967.strategyStorage.lltv")) - 1)) {
+            revert ErrorsLib.LLTV_SLOT_NOT_CORRECT();
+        }
+
         if (MLSConstantsLib.MTOKEN_SLOT != bytes32(uint256(keccak256("eip1967.strategyStorage.mToken")) - 1)) {
             revert ErrorsLib.MTOKEN_SLOT_NOT_CORRECT();
         }
@@ -85,9 +103,7 @@ contract MorphoLoopingStrategy is BaseUpgradeableStrategy, Helpers, StateSetter 
         require(_borrowTargetFactorNumerator < _collateralFactorNumerator, "Target should be lower than limit");
         _setFactorDenominator(_factorDenominator);
         setUint256(MLSConstantsLib.COLLATERALFACTORNUMERATOR_SLOT, _collateralFactorNumerator);
-        setUint256(
-            MLSConstantsLib.BORROWTARGETFACTORNUMERATOR_SLOT, _borrowTargetFactorNumerator
-        );
+        setUint256(MLSConstantsLib.BORROWTARGETFACTORNUMERATOR_SLOT, _borrowTargetFactorNumerator);
         setBoolean(MLSConstantsLib.FOLD_SLOT, _fold);
         address[] memory markets = new address[](1);
         markets[0] = _mToken;
@@ -108,14 +124,16 @@ contract MorphoLoopingStrategy is BaseUpgradeableStrategy, Helpers, StateSetter 
      */
     function withdrawAllToVault() public restricted updateSupplyInTheEnd {
         address _underlying = underlying();
-        _withdrawMaximum(true);
+        _claimRewards();
+        _liquidateRewards();
+        _withdrawMaximum();
         if (IERC20(_underlying).balanceOf(address(this)) > 0) {
             IERC20(_underlying).safeTransfer(vault(), IERC20(_underlying).balanceOf(address(this)));
         }
     }
 
     function emergencyExit() external onlyGovernance updateSupplyInTheEnd {
-        _withdrawMaximum(false);
+        _withdrawMaximum();
     }
 
     /**
@@ -125,12 +143,21 @@ contract MorphoLoopingStrategy is BaseUpgradeableStrategy, Helpers, StateSetter 
      *
      * DOES NOT ensure that the strategy vUnderlying balance becomes 0.
      */
-    function _withdrawMaximum(bool claim) internal updateSupplyInTheEnd {
-        if (claim) {
-            _claimRewards();
-            _liquidateRewards();
+    function _withdrawMaximum() internal updateSupplyInTheEnd {
+        address _mToken = getMToken();
+        // amount of liquidity in Radiant
+        uint256 available = MTokenInterface(_mToken).getCash();
+        // amount we supplied
+        uint256 supplied = MTokenInterface(_mToken).balanceOfUnderlying(address(this));
+        // amount we borrowed
+        uint256 borrowed = MTokenInterface(_mToken).borrowBalanceCurrent(address(this));
+        uint256 balance = supplied - borrowed;
+
+        _redeemWithFlashloan(Math.min(available, balance), 0);
+        supplied = MTokenInterface(_mToken).balanceOfUnderlying(address(this));
+        if (supplied > 0) {
+            _withdrawCollateralWrap(type(uint256).max);
         }
-        _redeemMaximumWithFlashloan();
     }
 
     function withdrawToVault(uint256 amountUnderlying) public restricted updateSupplyInTheEnd {
@@ -213,12 +240,8 @@ contract MorphoLoopingStrategy is BaseUpgradeableStrategy, Helpers, StateSetter 
     function _investAllUnderlying() internal onlyNotPausedInvesting updateSupplyInTheEnd {
         address _underlying = underlying();
         uint256 underlyingBalance = IERC20(_underlying).balanceOf(address(this));
-        if (underlyingBalance > 0) {
-            _supply(underlyingBalance);
-        }
-        if (!getFoldStatus()) {
-            return;
-        }
+        if (underlyingBalance > 0) _supplyCollateralWrap(underlyingBalance);
+        if (!getFoldStatus()) return;
         _depositWithFlashloan();
     }
 
@@ -254,89 +277,30 @@ contract MorphoLoopingStrategy is BaseUpgradeableStrategy, Helpers, StateSetter 
         return IERC20(underlying()).balanceOf(address(this)) + suppliedInUnderlying - borrowedInUnderlying;
     }
 
-    /**
-     * _supply -> supplyCollateral
-     * _borrow -> borrow
-     * _redeem -> withdrawCollateral
-     * _repay -> repayAmount
-     */
-
-    /**
-     * Supplies to Moonwel
-     */
-    function _supply(uint256 amount) internal {
-        if (amount == 0) {
-            return;
-        }
+    function receiveFlashLoan(
+        IERC20[] memory, /*tokens*/
+        uint256[] memory amounts,
+        uint256[] memory feeAmounts,
+        bytes memory /*userData*/
+    ) external {
+        require(msg.sender == MLSConstantsLib.BVAULT);
+        require(!makingFlashDeposit || !makingFlashWithdrawal, "Only one can be true");
+        require(makingFlashDeposit || makingFlashWithdrawal, "One has to be true");
         address _underlying = underlying();
-        address _mToken = getMToken();
-        uint256 balance = IERC20(_underlying).balanceOf(address(this));
-        if (amount < balance) {
-            balance = amount;
+        uint256 toRepay = amounts[0] + feeAmounts[0];
+        if (makingFlashDeposit) {
+            _supplyCollateralWrap(amounts[0]);
+            _borrowWrap(toRepay);
+        } else {
+            address _mToken = getMToken();
+            uint256 borrowed = MTokenInterface(_mToken).borrowBalanceCurrent(address(this));
+            uint256 repaying = Math.min(amounts[0], borrowed);
+            IERC20(_underlying).safeApprove(_mToken, 0);
+            IERC20(_underlying).safeApprove(_mToken, repaying);
+            _repayAmountWrap(repaying);
+            _withdrawCollateralWrap(toRepay);
         }
-        uint256 supplyCap = ComptrollerInterface(rewardPool()).supplyCaps(_mToken);
-        uint256 currentSupplied =
-            MTokenInterface(_mToken).totalSupply() * MTokenInterface(_mToken).exchangeRateCurrent() / 1e18;
-        if (currentSupplied >= supplyCap) {
-            return;
-        } else if (supplyCap - currentSupplied <= balance) {
-            balance = supplyCap - currentSupplied - 2;
-        }
-        IERC20(_underlying).safeApprove(_mToken, 0);
-        IERC20(_underlying).safeApprove(_mToken, balance);
-        MErc20Interface(_mToken).mint(balance);
-    }
-
-    /**
-     * Borrows against the collateral
-     */
-    function _borrow(uint256 amountUnderlying) internal {
-        if (amountUnderlying == 0) {
-            return;
-        }
-        // Borrow, check the balance for this contract's address
-        MErc20Interface(getMToken()).borrow(amountUnderlying);
-        if (underlying() == MLSConstantsLib.WETH) {
-            IWETH(MLSConstantsLib.WETH).deposit{value: address(this).balance}();
-        }
-    }
-
-    function _redeem(uint256 amountUnderlying) internal {
-        if (amountUnderlying == 0) {
-            return;
-        }
-        MErc20Interface(getMToken()).redeemUnderlying(amountUnderlying);
-        if (underlying() == MLSConstantsLib.WETH) {
-            IWETH(MLSConstantsLib.WETH).deposit{value: address(this).balance}();
-        }
-    }
-
-    function _repay(uint256 amountUnderlying) internal {
-        if (amountUnderlying == 0) {
-            return;
-        }
-        address _underlying = underlying();
-        address _mToken = getMToken();
-        IERC20(_underlying).safeApprove(_mToken, 0);
-        IERC20(_underlying).safeApprove(_mToken, amountUnderlying);
-        MErc20Interface(_mToken).repayBorrow(amountUnderlying);
-    }
-
-    function _redeemMaximumWithFlashloan() internal {
-        address _mToken = getMToken();
-        // amount of liquidity in Radiant
-        uint256 available = MTokenInterface(_mToken).getCash();
-        // amount we supplied
-        uint256 supplied = MTokenInterface(_mToken).balanceOfUnderlying(address(this));
-        // amount we borrowed
-        uint256 borrowed = MTokenInterface(_mToken).borrowBalanceCurrent(address(this));
-        uint256 balance = supplied - borrowed;
-
-        _redeemWithFlashloan(Math.min(available, balance), 0);
-        supplied = MTokenInterface(_mToken).balanceOfUnderlying(address(this));
-        if (supplied > 0) {
-            _redeem(type(uint256).max);
-        }
+        IERC20(_underlying).safeTransfer(MLSConstantsLib.BVAULT, toRepay);
     }
 
     function _depositWithFlashloan() internal {
@@ -426,34 +390,8 @@ contract MorphoLoopingStrategy is BaseUpgradeableStrategy, Helpers, StateSetter 
             makingFlashWithdrawal = true;
             IBVault(MLSConstantsLib.BVAULT).flashLoan(address(this), tokens, amounts, userData);
             makingFlashWithdrawal = false;
-            _redeem(amount);
+            _withdrawCollateralWrap(amount);
         }
-    }
-
-    function receiveFlashLoan(
-        IERC20[] memory, /*tokens*/
-        uint256[] memory amounts,
-        uint256[] memory feeAmounts,
-        bytes memory /*userData*/
-    ) external {
-        require(msg.sender == MLSConstantsLib.BVAULT);
-        require(!makingFlashDeposit || !makingFlashWithdrawal, "Only one can be true");
-        require(makingFlashDeposit || makingFlashWithdrawal, "One has to be true");
-        address _underlying = underlying();
-        uint256 toRepay = amounts[0] + feeAmounts[0];
-        if (makingFlashDeposit) {
-            _supply(amounts[0]);
-            _borrow(toRepay);
-        } else {
-            address _mToken = getMToken();
-            uint256 borrowed = MTokenInterface(_mToken).borrowBalanceCurrent(address(this));
-            uint256 repaying = Math.min(amounts[0], borrowed);
-            IERC20(_underlying).safeApprove(_mToken, 0);
-            IERC20(_underlying).safeApprove(_mToken, repaying);
-            _repay(repaying);
-            _redeem(toRepay);
-        }
-        IERC20(_underlying).safeTransfer(MLSConstantsLib.BVAULT, toRepay);
     }
 
     function _depositNoFlash(uint256 supplied, uint256 borrowed, address _mToken, uint256 _denom, uint256 _borrowNum)
@@ -487,10 +425,10 @@ contract MorphoLoopingStrategy is BaseUpgradeableStrategy, Helpers, StateSetter 
         while (borrowed < borrowTarget) {
             uint256 wantBorrow = borrowTarget - borrowed;
             uint256 maxBorrow = supplied * getCollateralFactorNumerator() / _denom - borrowed;
-            _borrow(Math.min(wantBorrow, maxBorrow));
+            _borrowWrap(Math.min(wantBorrow, maxBorrow));
             uint256 underlyingBalance = IERC20(_underlying).balanceOf(address(this));
             if (underlyingBalance > 0) {
-                _supply(underlyingBalance);
+                _supplyCollateralWrap(underlyingBalance);
             }
             //update parameters
             borrowed = MTokenInterface(_mToken).borrowBalanceCurrent(address(this));
@@ -520,10 +458,10 @@ contract MorphoLoopingStrategy is BaseUpgradeableStrategy, Helpers, StateSetter 
             // redeem just as much as needed to repay the loan
             // supplied - requiredCollateral = max redeemable, amount + repay = needed
             uint256 toRedeem = Math.min(supplied - requiredCollateral, amount + toRepay);
-            _redeem(toRedeem);
+            _withdrawCollateralWrap(toRedeem);
             // now we can repay our borrowed amount
             uint256 _underlyingBalance = IERC20(_underlying).balanceOf(address(this));
-            _repay(Math.min(toRepay, _underlyingBalance));
+            _repayAmountWrap(Math.min(toRepay, _underlyingBalance));
             // update the parameters
             borrowed = MTokenInterface(_mToken).borrowBalanceCurrent(address(this));
             supplied = MTokenInterface(_mToken).balanceOfUnderlying(address(this));
@@ -533,7 +471,7 @@ contract MorphoLoopingStrategy is BaseUpgradeableStrategy, Helpers, StateSetter 
             uint256 toRedeem = amount - underlyingBalance;
             uint256 balance = supplied - borrowed;
             // redeem the most we can redeem
-            _redeem(Math.min(toRedeem, balance));
+            _withdrawCollateralWrap(Math.min(toRedeem, balance));
         }
     }
 
