@@ -3,6 +3,7 @@ pragma solidity 0.8.26;
 
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {MarketParams} from "@morpho-org/morpho-blue/src/interfaces/IMorpho.sol";
 import "../../base/interface/IUniversalLiquidator.sol";
 import "../../base/interface/IVault.sol";
 import "../../base/upgradability/BaseUpgradeableStrategy.sol";
@@ -155,9 +156,7 @@ contract MorphoLoopingStrategy is BaseUpgradeableStrategy, Helpers, MorphoOps, S
 
         _redeemWithFlashloan(Math.min(available, balance), 0);
         supplied = MTokenInterface(_mToken).balanceOfUnderlying(address(this));
-        if (supplied > 0) {
-            _withdrawCollateralWrap(type(uint256).max);
-        }
+        if (supplied > 0) MorphoBlueSnippets.withdrawAmount(getMarketParams(), supplied);
     }
 
     function withdrawToVault(uint256 amountUnderlying) public restricted updateSupplyInTheEnd {
@@ -206,8 +205,7 @@ contract MorphoLoopingStrategy is BaseUpgradeableStrategy, Helpers, MorphoOps, S
                 continue;
             }
             if (token != _rewardToken) {
-                IERC20(token).safeApprove(_universalLiquidator, 0);
-                IERC20(token).safeApprove(_universalLiquidator, balance);
+                IERC20(token).safeIncreaseAllowance(_universalLiquidator, balance);
                 IUniversalLiquidator(_universalLiquidator).swap(token, _rewardToken, balance, 1, address(this));
             }
         }
@@ -226,8 +224,7 @@ contract MorphoLoopingStrategy is BaseUpgradeableStrategy, Helpers, MorphoOps, S
 
         address _underlying = underlying();
         if (_underlying != _rewardToken) {
-            IERC20(_rewardToken).safeApprove(_universalLiquidator, 0);
-            IERC20(_rewardToken).safeApprove(_universalLiquidator, remainingRewardBalance);
+            IERC20(_rewardToken).safeIncreaseAllowance(_universalLiquidator, remainingRewardBalance);
             IUniversalLiquidator(_universalLiquidator).swap(
                 _rewardToken, _underlying, remainingRewardBalance, 1, address(this)
             );
@@ -288,17 +285,17 @@ contract MorphoLoopingStrategy is BaseUpgradeableStrategy, Helpers, MorphoOps, S
         require(makingFlashDeposit || makingFlashWithdrawal, "One has to be true");
         address _underlying = underlying();
         uint256 toRepay = amounts[0] + feeAmounts[0];
+        MarketParams memory marketParams = getMarketParams();
         if (makingFlashDeposit) {
             _supplyCollateralWrap(amounts[0]);
-            _borrowWrap(toRepay);
+            if (toRepay > 0) MorphoBlueSnippets.borrow(marketParams, toRepay);
         } else {
             address _mToken = getMToken();
             uint256 borrowed = MTokenInterface(_mToken).borrowBalanceCurrent(address(this));
             uint256 repaying = Math.min(amounts[0], borrowed);
-            IERC20(_underlying).safeApprove(_mToken, 0);
-            IERC20(_underlying).safeApprove(_mToken, repaying);
-            _repayAmountWrap(repaying);
-            _withdrawCollateralWrap(toRepay);
+            IERC20(_underlying).safeIncreaseAllowance(_mToken, repaying);
+            if (repaying > 0) MorphoBlueSnippets.repayAmount(marketParams, repaying);
+            if (toRepay > 0) MorphoBlueSnippets.withdrawAmount(marketParams, toRepay);
         }
         IERC20(_underlying).safeTransfer(MLSConstantsLib.BVAULT, toRepay);
     }
@@ -390,7 +387,7 @@ contract MorphoLoopingStrategy is BaseUpgradeableStrategy, Helpers, MorphoOps, S
             makingFlashWithdrawal = true;
             IBVault(MLSConstantsLib.BVAULT).flashLoan(address(this), tokens, amounts, userData);
             makingFlashWithdrawal = false;
-            _withdrawCollateralWrap(amount);
+            if (amount > 0) MorphoBlueSnippets.withdrawAmount(getMarketParams(), amount);
         }
     }
 
@@ -425,11 +422,10 @@ contract MorphoLoopingStrategy is BaseUpgradeableStrategy, Helpers, MorphoOps, S
         while (borrowed < borrowTarget) {
             uint256 wantBorrow = borrowTarget - borrowed;
             uint256 maxBorrow = supplied * getCollateralFactorNumerator() / _denom - borrowed;
-            _borrowWrap(Math.min(wantBorrow, maxBorrow));
+            uint256 borrowAmount = Math.min(wantBorrow, maxBorrow);
+            MorphoBlueSnippets.borrow(getMarketParams(), borrowAmount);
             uint256 underlyingBalance = IERC20(_underlying).balanceOf(address(this));
-            if (underlyingBalance > 0) {
-                _supplyCollateralWrap(underlyingBalance);
-            }
+            if (underlyingBalance > 0) _supplyCollateralWrap(underlyingBalance);
             //update parameters
             borrowed = MTokenInterface(_mToken).borrowBalanceCurrent(address(this));
             supplied = MTokenInterface(_mToken).balanceOfUnderlying(address(this));
@@ -458,10 +454,11 @@ contract MorphoLoopingStrategy is BaseUpgradeableStrategy, Helpers, MorphoOps, S
             // redeem just as much as needed to repay the loan
             // supplied - requiredCollateral = max redeemable, amount + repay = needed
             uint256 toRedeem = Math.min(supplied - requiredCollateral, amount + toRepay);
-            _withdrawCollateralWrap(toRedeem);
+            if (toRedeem > 0) MorphoBlueSnippets.withdrawAmount(getMarketParams(), toRedeem);
             // now we can repay our borrowed amount
             uint256 _underlyingBalance = IERC20(_underlying).balanceOf(address(this));
-            _repayAmountWrap(Math.min(toRepay, _underlyingBalance));
+            uint256 repayAmount = Math.min(toRepay, _underlyingBalance);
+            MorphoBlueSnippets.repayAmount(getMarketParams(), repayAmount);
             // update the parameters
             borrowed = MTokenInterface(_mToken).borrowBalanceCurrent(address(this));
             supplied = MTokenInterface(_mToken).balanceOfUnderlying(address(this));
@@ -470,8 +467,9 @@ contract MorphoLoopingStrategy is BaseUpgradeableStrategy, Helpers, MorphoOps, S
         if (underlyingBalance < amount) {
             uint256 toRedeem = amount - underlyingBalance;
             uint256 balance = supplied - borrowed;
+            uint256 redeemAmount = Math.min(toRedeem, balance);
             // redeem the most we can redeem
-            _withdrawCollateralWrap(Math.min(toRedeem, balance));
+            if (redeemAmount > 0) MorphoBlueSnippets.withdrawAmount(getMarketParams(), redeemAmount);
         }
     }
 
