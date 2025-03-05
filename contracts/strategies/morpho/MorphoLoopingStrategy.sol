@@ -4,6 +4,7 @@ pragma solidity 0.8.26;
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {MarketParams} from "@morpho-org/morpho-blue/src/interfaces/IMorpho.sol";
+import {MarketParamsLib} from "@morpho-org/morpho-blue/src/libraries/MarketParamsLib.sol";
 import "../../base/interface/IUniversalLiquidator.sol";
 import "../../base/interface/IVault.sol";
 import "../../base/upgradability/BaseUpgradeableStrategy.sol";
@@ -12,7 +13,7 @@ import "../../base/interface/moonwell/ComptrollerInterface.sol";
 import "../../base/interface/balancer/IBVault.sol";
 import "../../base/interface/weth/IWETH.sol";
 
-import {Helpers} from "./utils/Helpers.sol";
+import {StrategyOps} from "./utils/StrategyOps.sol";
 import {StateSetter} from "./utils/StateSetter.sol";
 import {Checks} from "./utils/Checks.sol";
 import {MLSConstantsLib} from "./libraries/MLSConstantsLib.sol";
@@ -20,17 +21,12 @@ import {ErrorsLib} from "./libraries/ErrorsLib.sol";
 import {MorphoBlueSnippets} from "./libraries/MorphoBlueLib.sol";
 import {MorphoOps} from "./utils/MorphoOps.sol";
 
-contract MorphoLoopingStrategy is BaseUpgradeableStrategy, Helpers, MorphoOps, StateSetter {
+contract MorphoLoopingStrategy is StrategyOps, MorphoOps, StateSetter {
     using SafeERC20 for IERC20;
-
-    uint256 public suppliedInUnderlying;
-    uint256 public borrowedInUnderlying;
+    using MarketParamsLib for MarketParams;
 
     bool internal makingFlashDeposit;
     bool internal makingFlashWithdrawal;
-
-    /// @dev Reset on each upgrade
-    address[] public rewardTokens;
 
     constructor() BaseUpgradeableStrategy() {
         if (MLSConstantsLib.LOAN_TOKEN_SLOT != bytes32(uint256(keccak256("eip1967.strategyStorage.loanToken")) - 1)) {
@@ -111,55 +107,24 @@ contract MorphoLoopingStrategy is BaseUpgradeableStrategy, Helpers, MorphoOps, S
         ComptrollerInterface(_comptroller).enterMarkets(markets);
     }
 
-    modifier updateSupplyInTheEnd() {
-        _;
-        address _mToken = getMToken();
-        // amount we supplied
-        suppliedInUnderlying = MTokenInterface(_mToken).balanceOfUnderlying(address(this));
-        // amount we borrowed
-        borrowedInUnderlying = MTokenInterface(_mToken).borrowBalanceCurrent(address(this));
-    }
-
     /**
      * Exits Moonwell and transfers everything to the vault.
      */
-    function withdrawAllToVault() public restricted updateSupplyInTheEnd {
+    function withdrawAllToVault() public restricted {
         address _underlying = underlying();
-        _claimRewards();
-        _liquidateRewards();
+        ComptrollerInterface(rewardPool()).claimReward();
+        _liquidateRewards(sell(), rewardToken(), universalLiquidator(), _underlying);
         _withdrawMaximum();
         if (IERC20(_underlying).balanceOf(address(this)) > 0) {
             IERC20(_underlying).safeTransfer(vault(), IERC20(_underlying).balanceOf(address(this)));
         }
     }
 
-    function emergencyExit() external onlyGovernance updateSupplyInTheEnd {
+    function emergencyExit() external onlyGovernance {
         _withdrawMaximum();
     }
 
-    /**
-     * Redeems maximum that can be redeemed from Venus.
-     * Redeem the minimum of the underlying we own, and the underlying that the vToken can
-     * immediately retrieve. Ensures that `redeemMaximum` doesn't fail silently.
-     *
-     * DOES NOT ensure that the strategy vUnderlying balance becomes 0.
-     */
-    function _withdrawMaximum() internal updateSupplyInTheEnd {
-        address _mToken = getMToken();
-        // amount of liquidity in Radiant
-        uint256 available = MTokenInterface(_mToken).getCash();
-        // amount we supplied
-        uint256 supplied = MTokenInterface(_mToken).balanceOfUnderlying(address(this));
-        // amount we borrowed
-        uint256 borrowed = MTokenInterface(_mToken).borrowBalanceCurrent(address(this));
-        uint256 balance = supplied - borrowed;
-
-        _redeemWithFlashloan(Math.min(available, balance), 0);
-        supplied = MTokenInterface(_mToken).balanceOfUnderlying(address(this));
-        if (supplied > 0) MorphoBlueSnippets.withdrawAmount(getMarketParams(), supplied);
-    }
-
-    function withdrawToVault(uint256 amountUnderlying) public restricted updateSupplyInTheEnd {
+    function withdrawToVault(uint256 amountUnderlying) public restricted {
         address _underlying = underlying();
         uint256 balance = IERC20(_underlying).balanceOf(address(this));
         if (amountUnderlying <= balance) {
@@ -178,63 +143,41 @@ contract MorphoLoopingStrategy is BaseUpgradeableStrategy, Helpers, MorphoOps, S
     }
 
     /**
+     * Redeems maximum that can be redeemed from Venus.
+     * Redeem the minimum of the underlying we own, and the underlying that the vToken can
+     * immediately retrieve. Ensures that `redeemMaximum` doesn't fail silently.
+     *
+     * DOES NOT ensure that the strategy vUnderlying balance becomes 0.
+     */
+    function _withdrawMaximum() internal {
+        address _mToken = getMToken();
+        // amount of liquidity in Radiant
+        uint256 available = MTokenInterface(_mToken).getCash();
+        // amount we supplied
+        uint256 supplied = MTokenInterface(_mToken).balanceOfUnderlying(address(this));
+        // amount we borrowed
+        uint256 borrowed = MTokenInterface(_mToken).borrowBalanceCurrent(address(this));
+        uint256 balance = supplied - borrowed;
+
+        _redeemWithFlashloan(Math.min(available, balance), 0);
+        supplied = MTokenInterface(_mToken).balanceOfUnderlying(address(this));
+        if (supplied > 0) MorphoBlueSnippets.withdrawAmount(getMarketParams(), supplied);
+    }
+
+    /**
      * Withdraws all assets, liquidates XVS, and invests again in the required ratio.
      */
     function doHardWork() public restricted {
-        _claimRewards();
-        _liquidateRewards();
-        _investAllUnderlying();
-    }
-
-    function _claimRewards() internal {
+        // TODO: remove this once we have a proper reward claiming mechanism
         ComptrollerInterface(rewardPool()).claimReward();
-    }
-
-    function _liquidateRewards() internal {
-        if (!sell()) {
-            // Profits can be disabled for possible simplified and rapid exit
-            emit ProfitsNotCollected(sell(), false);
-            return;
-        }
-        address _rewardToken = rewardToken();
-        address _universalLiquidator = universalLiquidator();
-        for (uint256 i; i < rewardTokens.length; i++) {
-            address token = rewardTokens[i];
-            uint256 balance = IERC20(token).balanceOf(address(this));
-            if (balance == 0) {
-                continue;
-            }
-            if (token != _rewardToken) {
-                IERC20(token).safeIncreaseAllowance(_universalLiquidator, balance);
-                IUniversalLiquidator(_universalLiquidator).swap(token, _rewardToken, balance, 1, address(this));
-            }
-        }
-        uint256 rewardBalance = IERC20(_rewardToken).balanceOf(address(this));
-
-        if (rewardBalance < 1e8) {
-            return;
-        }
-
-        _notifyProfitInRewardToken(_rewardToken, rewardBalance);
-        uint256 remainingRewardBalance = IERC20(_rewardToken).balanceOf(address(this));
-
-        if (remainingRewardBalance < 1e10) {
-            return;
-        }
-
-        address _underlying = underlying();
-        if (_underlying != _rewardToken) {
-            IERC20(_rewardToken).safeIncreaseAllowance(_universalLiquidator, remainingRewardBalance);
-            IUniversalLiquidator(_universalLiquidator).swap(
-                _rewardToken, _underlying, remainingRewardBalance, 1, address(this)
-            );
-        }
+        _liquidateRewards(sell(), rewardToken(), universalLiquidator(), underlying());
+        _investAllUnderlying();
     }
 
     /**
      * The strategy invests by supplying the underlying as a collateral.
      */
-    function _investAllUnderlying() internal onlyNotPausedInvesting updateSupplyInTheEnd {
+    function _investAllUnderlying() internal onlyNotPausedInvesting {
         address _underlying = underlying();
         uint256 underlyingBalance = IERC20(_underlying).balanceOf(address(this));
         if (underlyingBalance > 0) _supplyCollateralWrap(underlyingBalance);
@@ -262,16 +205,16 @@ contract MorphoLoopingStrategy is BaseUpgradeableStrategy, Helpers, MorphoOps, S
         IERC20(token).safeTransfer(recipient, amount);
     }
 
-    function addRewardToken(address _token) public onlyGovernance {
-        rewardTokens.push(_token);
-    }
-
     /**
-     * Returns the current balance.
+     * @notice Returns the current balance.
+     * @dev underlying in this strategy + collateral in Morpho - borrow in Morpho
+     * @return balance The current balance.
      */
-    function investedUnderlyingBalance() public view returns (uint256) {
-        // underlying in this strategy + underlying redeemable from Radiant - debt
-        return IERC20(underlying()).balanceOf(address(this)) + suppliedInUnderlying - borrowedInUnderlying;
+    function investedUnderlyingBalance() public view returns (uint256 balance) {
+        MarketParams memory marketParams = getMarketParams();
+        return IERC20(underlying()).balanceOf(address(this))
+            + MorphoBlueSnippets.collateralAssetsUser(marketParams.id(), address(this))
+            - MorphoBlueSnippets.borrowAssetsUser(marketParams, address(this));
     }
 
     function receiveFlashLoan(
@@ -473,7 +416,7 @@ contract MorphoLoopingStrategy is BaseUpgradeableStrategy, Helpers, MorphoOps, S
         }
     }
 
-    function finalizeUpgrade() external onlyGovernance updateSupplyInTheEnd {
+    function finalizeUpgrade() external onlyGovernance {
         _finalizeUpgrade();
     }
 }
