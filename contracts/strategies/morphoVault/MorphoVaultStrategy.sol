@@ -62,7 +62,7 @@ contract MorphoVaultStrategy is BaseUpgradeableStrategy {
 
     require(IMorphoVault(_morphoVault).asset() == _underlying, "Underlying mismatch");
     _setMorphoVault(_morphoVault);
-    _setMorphoPrePay(_morphoPrePay);
+    setAddress(_PRE_PAY_SLOT, _morphoPrePay);
   }
 
   function currentSupplied() public view returns (uint256) {
@@ -293,7 +293,7 @@ contract MorphoVaultStrategy is BaseUpgradeableStrategy {
     return getAddress(_MORPHO_VAULT_SLOT);
   }
 
-  function _setMorphoPrePay (address _target) internal {
+  function setMorphoPrePay (address _target) public onlyGovernance {
     setAddress(_PRE_PAY_SLOT, _target);
   }
 

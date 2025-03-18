@@ -6,13 +6,12 @@ import "@openzeppelin/contracts/utils/math/Math.sol";
 import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 
 import "./inheritance/Controllable.sol";
 import "./interface/IController.sol";
 import "./interface/IStrategy.sol";
 
-contract RewardPrePayMorhpo is Controllable, ReentrancyGuard {
+contract RewardPrePayMorhpo is Controllable {
     using SafeERC20 for IERC20;
     using Address for address;
     using SafeMath for uint256;
@@ -60,7 +59,7 @@ contract RewardPrePayMorhpo is Controllable, ReentrancyGuard {
         return rewardEarned[_strategy].sub(rewardClaimed[_strategy]);
     }
 
-    function _claim(address _strategy) internal onlyInitialized(_strategy) nonReentrant {
+    function _claim(address _strategy) internal onlyInitialized(_strategy) {
         uint256 claimableAmount = claimable(_strategy);
         uint256 payableAmount = claimableAmount.mul(100).div(101);
         uint256 balance = IERC20(MORPHO).balanceOf(address(this));
@@ -107,7 +106,7 @@ contract RewardPrePayMorhpo is Controllable, ReentrancyGuard {
         uint256 newAmount,
         address distr,
         bytes calldata txData
-    ) public onlyHardWorkerOrGovernance nonReentrant {
+    ) public onlyHardWorkerOrGovernance {
         updateReward(strategy, newAmount);
         _claim(strategy);
         uint256 balanceBefore = IERC20(MORPHO).balanceOf(address(this));
