@@ -2,12 +2,9 @@ const makeVault = require("./make-vault.js");
 const addresses = require("../test-config.js");
 const IController = artifacts.require("IController");
 const Vault = artifacts.require("VaultV2");
-const CLVault = artifacts.require("CLVault");
-const VaultProxy = artifacts.require("VaultProxy");
 const IUpgradeableStrategy = artifacts.require("IUpgradeableStrategy");
 const ILiquidatorRegistry = artifacts.require("IUniversalLiquidatorRegistry");
 const IDex = artifacts.require("IDex");
-const IERC721 = artifacts.require("IERC721");
 
 const Utils = require("./Utils.js");
 
@@ -30,15 +27,6 @@ async function setupCoreProtocol(config) {
   if(config.existingVaultAddress != null){
     vault = await Vault.at(config.existingVaultAddress);
     console.log("Fetching Vault at: ", vault.address);
-  } else if (config.CLVault) {
-    const impl = await CLVault.new();
-    const implAddress = impl.address;
-    const vaultAsProxy = await VaultProxy.new(implAddress);
-    vault = await CLVault.at(vaultAsProxy.address);
-    const nftToken = await IERC721.at(config.CLSetup.posManager);
-    await nftToken.approve(vault.address, config.CLSetup.posId, { from: config.Governance })
-    await vault.initializeVault(addresses.Storage, config.CLSetup.posId, config.CLSetup.posManager, { from: config.Governance });
-    console.log("New Vault Deployed: ", vault.address);
   } else {
     const implAddress = config.vaultImplementationOverride || addresses.VaultImplementation;
     vault = await makeVault(implAddress, addresses.Storage, config.underlying.address, 100, 100, {
@@ -49,7 +37,7 @@ async function setupCoreProtocol(config) {
 
   controller = await IController.at(addresses.Controller);
 
-  let strategy = null, rewardPool = null;
+  let rewardPool = null;
 
   if (!config.rewardPoolConfig) {
     config.rewardPoolConfig = {};
@@ -143,28 +131,26 @@ async function setupCoreProtocol(config) {
     }
   }
 
-  if (config.strategyArtifact) {
-    let strategyImpl = null;
+  let strategyImpl = null;
 
-    if (!config.strategyArtifactIsUpgradable) {
-      strategy = await config.strategyArtifact.new(
-        ...config.strategyArgs,
-        { from: config.governance }
-      );
-    } else {
-      strategyImpl = await config.strategyArtifact.new();
-      const StrategyProxy = artifacts.require("StrategyProxy");
-  
-      const strategyProxy = await StrategyProxy.new(strategyImpl.address);
-      strategy = await config.strategyArtifact.at(strategyProxy.address);
-      await strategy.initializeStrategy(
-        ...config.strategyArgs,
-        { from: config.governance }
-      );
-    }
-    console.log("Strategy Deployed: ", strategy.address);
+  if (!config.strategyArtifactIsUpgradable) {
+    strategy = await config.strategyArtifact.new(
+      ...config.strategyArgs,
+      { from: config.governance }
+    );
+  } else {
+    strategyImpl = await config.strategyArtifact.new();
+    const StrategyProxy = artifacts.require("StrategyProxy");
+
+    const strategyProxy = await StrategyProxy.new(strategyImpl.address);
+    strategy = await config.strategyArtifact.at(strategyProxy.address);
+    await strategy.initializeStrategy(
+      ...config.strategyArgs,
+      { from: config.governance }
+    );
   }
 
+  console.log("Strategy Deployed: ", strategy.address);
 
   if (config.announceStrategy === true) {
     // Announce switch, time pass, switch to strategy
@@ -184,7 +170,7 @@ async function setupCoreProtocol(config) {
     await vault.setVaultFractionToInvest(100, 100, { from: config.governance });
     strategy = await config.strategyArtifact.at(await vault.strategy());
     console.log("Strategy upgrade completed.");
-  } else if (strategy) {
+  } else {
     await vault.setStrategy(strategy.address, {from: config.governance});
   }
   return [controller, vault, strategy, rewardPool];
