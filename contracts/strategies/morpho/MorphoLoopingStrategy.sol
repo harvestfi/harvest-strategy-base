@@ -5,13 +5,8 @@ import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {MarketParams} from "@morpho-org/morpho-blue/src/interfaces/IMorpho.sol";
 import {MarketParamsLib} from "@morpho-org/morpho-blue/src/libraries/MarketParamsLib.sol";
-import "../../base/interface/IUniversalLiquidator.sol";
-import "../../base/interface/IVault.sol";
 import "../../base/upgradability/BaseUpgradeableStrategy.sol";
-import "../../base/interface/moonwell/MTokenInterfaces.sol";
 import "../../base/interface/moonwell/ComptrollerInterface.sol";
-import "../../base/interface/balancer/IBVault.sol";
-import "../../base/interface/weth/IWETH.sol";
 
 import {DepositActions} from "./utils/AssetOps.sol";
 import {MorphoOps} from "./utils/MorphoOps.sol";
