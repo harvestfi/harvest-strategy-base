@@ -3,7 +3,7 @@ pragma solidity 0.6.12;
 
 import "./MorphoVaultStrategy.sol";
 
-contract MorphoVaultStrategyMainnet_MW_ETH is MorphoVaultStrategy {
+contract MorphoVaultStrategyMainnet_ETH is MorphoVaultStrategy {
 
   constructor() public {}
 

@@ -12,7 +12,7 @@ const BigNumber = require("bignumber.js");
 const IERC20 = artifacts.require("IERC20");
 
 //const Strategy = artifacts.require("");
-const Strategy = artifacts.require("MorphoVaultStrategyMainnet_MW_EURC");
+const Strategy = artifacts.require("MorphoVaultStrategyMainnet_EURC");
 
 // Developed and tested at blockNumber 25008000
 
