@@ -24,7 +24,6 @@ contract MoonwellFoldStrategyV2Mainnet_WETH is MoonwellFoldStrategyV2 {
       well,
       820,
       840,
-      1000,
       true
     );
     rewardTokens = [well];
