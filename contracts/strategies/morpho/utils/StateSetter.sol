@@ -43,10 +43,6 @@ abstract contract StateSetter is ControllableInit, Checks {
         setUint256(MLSConstantsLib.COLLATERALFACTORNUMERATOR_SLOT, _numerator);
     }
 
-    function setFold(bool _fold) public onlyGovernance {
-        setBoolean(MLSConstantsLib.FOLD_SLOT, _fold);
-    }
-
     function setBorrowTargetFactorNumerator(uint256 _numerator) public onlyGovernance {
         require(_numerator < getCollateralFactorNumerator(), "Target should be lower than collateral limit");
         setUint256(MLSConstantsLib.BORROWTARGETFACTORNUMERATOR_SLOT, _numerator);

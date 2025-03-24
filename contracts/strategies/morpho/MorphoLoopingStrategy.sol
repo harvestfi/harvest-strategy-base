@@ -13,13 +13,14 @@ import "../../base/interface/moonwell/ComptrollerInterface.sol";
 import "../../base/interface/balancer/IBVault.sol";
 import "../../base/interface/weth/IWETH.sol";
 
+import {DepositActions} from "./utils/AssetOps.sol";
+import {MorphoOps} from "./utils/MorphoOps.sol";
 import {StrategyOps} from "./utils/StrategyOps.sol";
 import {StateSetter} from "./utils/StateSetter.sol";
 import {Checks} from "./utils/Checks.sol";
 import {MLSConstantsLib} from "./libraries/MLSConstantsLib.sol";
 import {ErrorsLib} from "./libraries/ErrorsLib.sol";
 import {MorphoBlueSnippets} from "./libraries/MorphoBlueLib.sol";
-import {MorphoOps} from "./utils/MorphoOps.sol";
 
 contract MorphoLoopingStrategy is StrategyOps, MorphoOps, StateSetter {
     using SafeERC20 for IERC20;
