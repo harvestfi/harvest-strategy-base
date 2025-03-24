@@ -141,18 +141,19 @@ contract AerodromeVolatileStrategy is BaseUpgradeableStrategy {
         continue;
       }
       if (token != _rewardToken){
-        IERC20(token).safeApprove(_universalLiquidator, 0);
-        IERC20(token).safeApprove(_universalLiquidator, rewardBalance);
-        IUniversalLiquidator(_universalLiquidator).swap(token, _rewardToken, rewardBalance, 1, address(this));
+          IERC20(token).safeApprove(_universalLiquidator, 0);
+          IERC20(token).safeApprove(_universalLiquidator, rewardBalance);
+          IUniversalLiquidator(_universalLiquidator).swap(token, _rewardToken, rewardBalance, 1, address(this));
       }
     }
 
     uint256 rewardBalance = IERC20(_rewardToken).balanceOf(address(this));
-    if (rewardBalance < 1e14) {
-      return;
-    }
     _notifyProfitInRewardToken(_rewardToken, rewardBalance);
     uint256 remainingRewardBalance = IERC20(_rewardToken).balanceOf(address(this));
+
+    if (remainingRewardBalance < 1e13) {
+      return;
+    }
 
     address _underlying = underlying();
     address token0 = IPool(_underlying).token0();
