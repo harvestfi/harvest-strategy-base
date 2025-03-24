@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: Unlicense
-pragma solidity 0.6.12;
-
+pragma solidity 0.8.26;
 
 /**
  * @dev A routing contract that is responsible for taking the harvested gains and routing them into FARM and additional

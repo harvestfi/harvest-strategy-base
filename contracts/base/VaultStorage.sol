@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Unlicense
-pragma solidity 0.6.12;
+pragma solidity 0.8.26;
 
-import "@openzeppelin/contracts-upgradeable/proxy/Initializable.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 
 contract VaultStorage is Initializable {
 
@@ -16,6 +16,7 @@ contract VaultStorage is Initializable {
     bytes32 internal constant _NEXT_STRATEGY_TIMESTAMP_SLOT = 0x5d2b24811886ad126f78c499d71a932a5435795e4f2f6552f0900f12d663cdcf;
     bytes32 internal constant _INVEST_ON_DEPOSIT_SLOT = 0xf7bd21df2fc19bd074b391db8b42bdc473ae2e1b3067fdb7b05f39bd9eda16ea;
     bytes32 internal constant _PAUSED_SLOT = 0xf1cf856d03630b74791fc293cfafd739932a5a075b02d357fb7a726a38777930;
+    bytes32 internal constant _DECIMALS_SLOT = 0x246bc3666321037fcc8ce5afddcaab1759373f2b839e69dcb1f4c90cffa41f37;
 
     /**
      * @dev Storage slot with the address of the current implementation.
@@ -24,7 +25,9 @@ contract VaultStorage is Initializable {
      */
     bytes32 internal constant _IMPLEMENTATION_SLOT = 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc;
 
-    constructor() public {
+    bytes32 internal constant _COMPOUND_ON_WITHDRAW_SLOT = 0x724ff40d01b658bcc822d9ceb05c9e2f446998b3033585f9bcac7fd7929aaca7;
+
+    constructor() {
         assert(_STRATEGY_SLOT == bytes32(uint256(keccak256("eip1967.vaultStorage.strategy")) - 1));
         assert(_UNDERLYING_SLOT == bytes32(uint256(keccak256("eip1967.vaultStorage.underlying")) - 1));
         assert(_UNDERLYING_UNIT_SLOT == bytes32(uint256(keccak256("eip1967.vaultStorage.underlyingUnit")) - 1));
@@ -36,21 +39,31 @@ contract VaultStorage is Initializable {
         assert(_NEXT_STRATEGY_TIMESTAMP_SLOT == bytes32(uint256(keccak256("eip1967.vaultStorage.nextStrategyTimestamp")) - 1));
         assert(_INVEST_ON_DEPOSIT_SLOT == bytes32(uint256(keccak256("eip1967.vaultStorage.investOnDeposit")) - 1));
         assert(_PAUSED_SLOT == bytes32(uint256(keccak256("eip1967.vaultStorage.paused")) - 1));
+        assert(_DECIMALS_SLOT == bytes32(uint256(keccak256("eip1967.vaultStorage.decimals")) - 1));
+        assert(_COMPOUND_ON_WITHDRAW_SLOT == bytes32(uint256(keccak256("eip1967.vaultStorage.compoundOnWithdraw")) - 1));
     }
 
     function initialize(
-        address _underlying,
+        address __underlying,
         uint256 _toInvestNumerator,
         uint256 _toInvestDenominator,
-        uint256 _underlyingUnit
+        uint256 __underlyingUnit
     ) public initializer {
-        _setUnderlying(_underlying);
+        _setUnderlying(__underlying);
         _setVaultFractionToInvestNumerator(_toInvestNumerator);
         _setVaultFractionToInvestDenominator(_toInvestDenominator);
-        _setUnderlyingUnit(_underlyingUnit);
+        _setUnderlyingUnit(__underlyingUnit);
         _setNextStrategyTimestamp(0);
         _setNextStrategy(address(0));
         _setInvestOnDeposit(true);
+    }
+
+    function _setDecimals(uint256 _value) internal {
+        setUint256(_DECIMALS_SLOT, _value);
+    }
+
+    function _decimals() internal view returns (uint256) {
+        return getUint256(_DECIMALS_SLOT);
     }
 
     function _setStrategy(address _address) internal {
@@ -99,6 +112,14 @@ contract VaultStorage is Initializable {
 
     function _investOnDeposit() internal view returns (bool) {
         return getBoolean(_INVEST_ON_DEPOSIT_SLOT);
+    }
+
+    function _setCompoundOnWithdraw(bool _value) internal {
+        setBoolean(_COMPOUND_ON_WITHDRAW_SLOT, _value);
+    }
+
+    function _compoundOnWithdraw() internal view returns (bool) {
+        return getBoolean(_COMPOUND_ON_WITHDRAW_SLOT);
     }
 
     function _setNextImplementation(address _address) internal {
@@ -181,5 +202,5 @@ contract VaultStorage is Initializable {
         }
     }
 
-    uint256[50] private ______gap;
+    uint256[49] private ______gap;
 }

@@ -1,16 +1,7 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.6.12;
+pragma solidity 0.8.26;
 
 interface IUniversalLiquidator {
-    event Swap(
-        address indexed sellToken,
-        address indexed buyToken,
-        address indexed receiver,
-        address initiator,
-        uint256 sellAmount,
-        uint256 minBuyAmount
-    );
-
     function swap(
         address _sellToken,
         address _buyToken,

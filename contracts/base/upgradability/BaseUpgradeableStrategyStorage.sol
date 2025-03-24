@@ -1,5 +1,5 @@
 //SPDX-License-Identifier: Unlicense
-pragma solidity 0.6.12;
+pragma solidity 0.8.26;
 
 import "../interface/IController.sol";
 import "../inheritance/ControllableInit.sol";
@@ -37,6 +37,8 @@ contract BaseUpgradeableStrategyStorage is ControllableInit {
       uint256 feeAmount,
       uint256 timestamp
   );
+  event ToggledEmergencyState(bool paused);
+  event RewardTokenAdded(address token);
 
   bytes32 internal constant _UNDERLYING_SLOT = 0xa1709211eeccf8f4ad5b6700d52a1a9525b5f5ae1e9e5f9e5a0c2fc23c86e530;
   bytes32 internal constant _VAULT_SLOT = 0xefd7c7d9ef1040fc87e7ad11fe15f86e1d11e1df03c6d7c87f7e1f4041f08d41;
@@ -57,7 +59,7 @@ contract BaseUpgradeableStrategyStorage is ControllableInit {
 
   bytes32 internal constant _STRATEGIST_SLOT = 0x6a7b588c950d46e2de3db2f157e5e0e4f29054c8d60f17bf0c30352e223a458d;
 
-  constructor() public {
+  constructor() {
     assert(_UNDERLYING_SLOT == bytes32(uint256(keccak256("eip1967.strategyStorage.underlying")) - 1));
     assert(_VAULT_SLOT == bytes32(uint256(keccak256("eip1967.strategyStorage.vault")) - 1));
     assert(_REWARD_TOKEN_SLOT == bytes32(uint256(keccak256("eip1967.strategyStorage.rewardToken")) - 1));
@@ -138,7 +140,6 @@ contract BaseUpgradeableStrategyStorage is ControllableInit {
     return getAddress(_VAULT_SLOT);
   }
 
-  // a flag for disabling selling for simplified emergency exit
   function _setSell(bool _value) internal {
     setBoolean(_SELL_SLOT, _value);
   }
@@ -286,4 +287,6 @@ contract BaseUpgradeableStrategyStorage is ControllableInit {
     str := sload(slot)
     }
   }
+
+  uint256[50] private ______gap;
 }

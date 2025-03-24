@@ -7,14 +7,13 @@ const {
 } = require("../utilities/hh-utils.js");
 
 const addresses = require("../test-config.js");
-const { send } = require("@openzeppelin/test-helpers");
 const BigNumber = require("bignumber.js");
 const IERC20 = artifacts.require("IERC20");
 
 //const Strategy = artifacts.require("");
 const Strategy = artifacts.require("FluidLendStrategyMainnet_USDC");
 
-// Developed and tested at blockNumber 20013200
+// Developed and tested at blockNumber 21793300
 
 // Vanilla Mocha test. Increased compatibility with tools that integrate Mocha.
 describe("Base Mainnet Fluid Lend USDC", function() {
@@ -70,9 +69,6 @@ describe("Base Mainnet Fluid Lend USDC", function() {
       "strategyArtifactIsUpgradable": true,
       "underlying": underlying,
       "governance": governance,
-      // "liquidation": [
-      //   {"aerodrome": [extra, weth]},
-      // ],
     });
 
     // whale send underlying to farmers

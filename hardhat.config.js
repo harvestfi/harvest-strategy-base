@@ -4,7 +4,7 @@ require("@nomiclabs/hardhat-web3");
 require("@nomiclabs/hardhat-ethers");
 require('hardhat-contract-sizer');
 
-const secret = require('./dev-keys.json');
+require('dotenv').config()
 
 // You need to export an object to set up your config
 // Go to https://hardhat.org/config/ to learn more
@@ -17,25 +17,25 @@ module.exports = {
   networks: {
     hardhat: {
       accounts: {
-        mnemonic: secret.mnemonic,
+        mnemonic: process.env.MNEMONIC,
       },
       chainId: 8453,
       forking: {
-        url: `https://base-mainnet.g.alchemy.com/v2/${secret.alchemyKey}`,
-        blockNumber: 18684400, // <-- edit here
+        url: `https://base-mainnet.g.alchemy.com/v2/${process.env.ALCHEMEY_KEY}`,
+        blockNumber: 26367650, // <-- edit here
       },
     },
     mainnet: {
-      url: `https://base-mainnet.g.alchemy.com/v2/${secret.alchemyKey}`,
+      url: `https://base-mainnet.g.alchemy.com/v2/${process.env.ALCHEMEY_KEY}`,
       accounts: {
-        mnemonic: secret.mnemonic,
+        mnemonic: process.env.MNEMONIC,
       },
     },
   },
   solidity: {
     compilers: [
       {
-        version: "0.6.12",
+        version: "0.8.26",
         settings: {
           optimizer: {
             enabled: true,
@@ -50,7 +50,7 @@ module.exports = {
   },
   etherscan: {
     apiKey: {
-      base: secret.etherscanAPI,
+      base: process.env.BASESCAN_API_KEY,
     },
     customChains: [
       {

@@ -1,30 +1,41 @@
-//SPDX-License-Identifier: Unlicense
-pragma solidity 0.6.12;
+// SPDX-License-Identifier: Unlicense
+pragma solidity 0.8.26;
 
-import "@openzeppelin/contracts/math/Math.sol";
-import "@openzeppelin/contracts/math/SafeMath.sol";
-import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
+import "@openzeppelin/contracts/utils/math/Math.sol";
+import "@openzeppelin/contracts/utils/math/SafeMath.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "../../base/interface/IUniversalLiquidator.sol";
-import "../../base/interface/IVault.sol";
 import "../../base/upgradability/BaseUpgradeableStrategy.sol";
 import "../../base/interface/aerodrome/IGauge.sol";
 import "../../base/interface/aerodrome/IPool.sol";
 import "../../base/interface/aerodrome/IRouter.sol";
 
+/**
+ * @title AerodromeVolatileStrategy
+ * @dev A strategy contract for volatile Aerodrome liquidity pools, allowing staking, claiming rewards,
+ * and reinvesting profits into the pool. Inherits from `BaseUpgradeableStrategy`.
+ */
 contract AerodromeVolatileStrategy is BaseUpgradeableStrategy {
-
   using SafeMath for uint256;
   using SafeERC20 for IERC20;
+
+  event GaugeChanged(address oldGauge, address newGauge);
 
   address public constant aeroRouter = address(0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43);
   address public constant harvestMSIG = address(0x97b3e5712CDE7Db13e939a188C8CA90Db5B05131);
 
-  // this would be reset on each upgrade
   address[] public rewardTokens;
 
-  constructor() public BaseUpgradeableStrategy() {
-  }
+  constructor() BaseUpgradeableStrategy() {}
 
+  /**
+   * @notice Initializes the strategy and verifies gauge compatibility with underlying asset.
+   * @param _storage Address of the storage contract.
+   * @param _underlying Address of the underlying asset.
+   * @param _vault Address of the vault.
+   * @param _gauge Address of the gauge contract for staking.
+   * @param _rewardToken Address of the reward token.
+   */
   function initializeBaseStrategy(
     address _storage,
     address _underlying,
@@ -32,7 +43,6 @@ contract AerodromeVolatileStrategy is BaseUpgradeableStrategy {
     address _gauge,
     address _rewardToken
   ) public initializer {
-
     BaseUpgradeableStrategy.initialize(
       _storage,
       _underlying,
@@ -48,10 +58,10 @@ contract AerodromeVolatileStrategy is BaseUpgradeableStrategy {
     }
   }
 
-  function depositArbCheck() public pure returns(bool) {
-    return true;
-  }
-
+  /**
+   * @notice Gets the balance of staked tokens in the reward pool.
+   * @return balance The staked balance in the reward pool.
+   */
   function _rewardPoolBalance() internal view returns (uint256 balance) {
     if (rewardPool() != address(0)) {
       balance = IGauge(rewardPool()).balanceOf(address(this));
@@ -60,6 +70,9 @@ contract AerodromeVolatileStrategy is BaseUpgradeableStrategy {
     }
   }
 
+  /**
+   * @notice Exits the reward pool in case of emergency.
+   */
   function _emergencyExitRewardPool() internal {
     uint256 stakedBalance = _rewardPoolBalance();
     if (stakedBalance != 0) {
@@ -67,12 +80,19 @@ contract AerodromeVolatileStrategy is BaseUpgradeableStrategy {
     }
   }
 
+  /**
+   * @notice Withdraws a specified amount of underlying tokens from the reward pool.
+   * @param amount Amount of tokens to withdraw.
+   */
   function _withdrawUnderlyingFromPool(uint256 amount) internal {
     if (amount > 0) {
       IGauge(rewardPool()).withdraw(amount);
     }
   }
 
+  /**
+   * @notice Deposits the entire balance of underlying tokens into the reward pool.
+   */
   function _enterRewardPool() internal {
     address underlying_ = underlying();
     address rewardPool_ = rewardPool();
@@ -85,39 +105,53 @@ contract AerodromeVolatileStrategy is BaseUpgradeableStrategy {
     IGauge(rewardPool_).deposit(entireBalance);
   }
 
+  /**
+   * @notice Invests all underlying tokens into the reward pool if investing is not paused.
+   */
   function _investAllUnderlying() internal onlyNotPausedInvesting {
-    // this check is needed, because most of the SNX reward pools will revert if
-    // you try to stake(0).
-    if(IERC20(underlying()).balanceOf(address(this)) > 0) {
+    if (IERC20(underlying()).balanceOf(address(this)) > 0) {
       _enterRewardPool();
     }
   }
 
-  /*
-  *   In case there are some issues discovered about the pool or underlying asset
-  *   Governance can exit the pool properly
-  *   The function is only used for emergency to exit the pool
-  */
+  /**
+   * @notice Emergency function to exit the reward pool and stop investing.
+   */
   function emergencyExit() public onlyGovernance {
     _emergencyExitRewardPool();
     _setPausedInvesting(true);
+    emit ToggledEmergencyState(true);
   }
 
-  /*
-  *   Resumes the ability to invest into the underlying reward pools
-  */
+  /**
+   * @notice Resumes investing in the reward pool after being paused.
+   */
   function continueInvesting() public onlyGovernance {
     _setPausedInvesting(false);
+    emit ToggledEmergencyState(true);
   }
 
+  /**
+   * @notice Checks if a token is non-salvageable (i.e., cannot be removed from the strategy).
+   * @param token Address of the token to check.
+   * @return Boolean indicating if the token is non-salvageable.
+   */
   function unsalvagableTokens(address token) public view returns (bool) {
     return (token == rewardToken() || token == underlying());
   }
 
+  /**
+   * @notice Adds a new reward token to the list of reward tokens.
+   * @param _token Address of the reward token to add.
+   */
   function addRewardToken(address _token) public onlyGovernance {
     rewardTokens.push(_token);
+    emit RewardTokenAdded(_token);
   }
 
+  /**
+   * @notice Claims rewards from the reward pool and associated pools.
+   */
   function _claimRewards() internal {
     IPool(underlying()).claimFees();
     if (rewardPool() != address(0)) {
@@ -125,25 +159,27 @@ contract AerodromeVolatileStrategy is BaseUpgradeableStrategy {
     }
   }
 
+  /**
+   * @notice Liquidates all rewards by converting them to the underlying asset.
+   */
   function _liquidateReward() internal {
     if (!sell()) {
-      // Profits can be disabled for possible simplified and rapid exit
       emit ProfitsNotCollected(sell(), false);
       return;
     }
 
     address _rewardToken = rewardToken();
     address _universalLiquidator = universalLiquidator();
-    for(uint256 i = 0; i < rewardTokens.length; i++){
+    for (uint256 i = 0; i < rewardTokens.length; i++) {
       address token = rewardTokens[i];
-      uint256 rewardBalance = IERC20(token).balanceOf(address(this));
-      if (rewardBalance == 0) {
+      uint256 balance = IERC20(token).balanceOf(address(this));
+      if (balance == 0) {
         continue;
       }
-      if (token != _rewardToken){
-          IERC20(token).safeApprove(_universalLiquidator, 0);
-          IERC20(token).safeApprove(_universalLiquidator, rewardBalance);
-          IUniversalLiquidator(_universalLiquidator).swap(token, _rewardToken, rewardBalance, 1, address(this));
+      if (token != _rewardToken) {
+        IERC20(token).safeApprove(_universalLiquidator, 0);
+        IERC20(token).safeApprove(_universalLiquidator, balance);
+        IUniversalLiquidator(_universalLiquidator).swap(token, _rewardToken, balance, 1, address(this));
       }
     }
 
@@ -170,7 +206,6 @@ contract AerodromeVolatileStrategy is BaseUpgradeableStrategy {
       IUniversalLiquidator(_universalLiquidator).swap(_rewardToken, token0, toToken0, 1, address(this));
       token0Amount = IERC20(token0).balanceOf(address(this));
     } else {
-      // otherwise we assme token0 is weth itself
       token0Amount = toToken0;
     }
 
@@ -182,7 +217,6 @@ contract AerodromeVolatileStrategy is BaseUpgradeableStrategy {
       token1Amount = toToken1;
     }
 
-    // provide token1 and token2 to BaseSwap
     IERC20(token0).safeApprove(aeroRouter, 0);
     IERC20(token0).safeApprove(aeroRouter, token0Amount);
 
@@ -202,9 +236,9 @@ contract AerodromeVolatileStrategy is BaseUpgradeableStrategy {
     );
   }
 
-  /*
-  *   Withdraws all the asset to the vault
-  */
+  /**
+   * @notice Withdraws all underlying assets to the vault.
+   */
   function withdrawAllToVault() public restricted {
     _withdrawUnderlyingFromPool(_rewardPoolBalance());
     _claimRewards();
@@ -213,18 +247,15 @@ contract AerodromeVolatileStrategy is BaseUpgradeableStrategy {
     IERC20(underlying_).safeTransfer(vault(), IERC20(underlying_).balanceOf(address(this)));
   }
 
-  /*
-  *   Withdraws all the asset to the vault
-  */
+  /**
+   * @notice Withdraws a specified amount of underlying assets to the vault.
+   * @param _amount Amount of underlying assets to withdraw.
+   */
   function withdrawToVault(uint256 _amount) public restricted {
-    // Typically there wouldn't be any amount here
-    // however, it is possible because of the emergencyExit
     address underlying_ = underlying();
     uint256 entireBalance = IERC20(underlying_).balanceOf(address(this));
 
-    if(_amount > entireBalance){
-      // While we have the check above, we still using SafeMath below
-      // for the peace of mind (in case something gets changed in between)
+    if (_amount > entireBalance) {
       uint256 needToWithdraw = _amount.sub(entireBalance);
       uint256 toWithdraw = Math.min(_rewardPoolBalance(), needToWithdraw);
       _withdrawUnderlyingFromPool(toWithdraw);
@@ -232,45 +263,41 @@ contract AerodromeVolatileStrategy is BaseUpgradeableStrategy {
     IERC20(underlying_).safeTransfer(vault(), _amount);
   }
 
-  /*
-  *   Note that we currently do not have a mechanism here to include the
-  *   amount of reward that is accrued.
-  */
+  /**
+   * @notice Returns the total balance of underlying assets managed by the strategy.
+   * @return Total balance of underlying assets.
+   */
   function investedUnderlyingBalance() external view returns (uint256) {
     if (rewardPool() == address(0)) {
       return IERC20(underlying()).balanceOf(address(this));
     }
-    // Adding the amount locked in the reward pool and the amount that is somehow in this contract
-    // both are in the units of "underlying"
-    // The second part is needed because there is the emergency exit mechanism
-    // which would break the assumption that all the funds are always inside of the reward pool
     return _rewardPoolBalance().add(IERC20(underlying()).balanceOf(address(this)));
   }
 
-  /*
-  *   Governance or Controller can claim coins that are somehow transferred into the contract
-  *   Note that they cannot come in take away coins that are used and defined in the strategy itself
-  */
+  /**
+   * @notice Allows governance or the controller to salvage tokens that are not part of the core strategy.
+   * @param recipient Address to receive the salvaged tokens.
+   * @param token Address of the token to salvage.
+   * @param amount Amount of tokens to salvage.
+   */
   function salvage(address recipient, address token, uint256 amount) external onlyControllerOrGovernance {
-     // To make sure that governance cannot come in and take away the coins
-    require(!unsalvagableTokens(token), "token is defined as not salvagable");
+    require(!unsalvagableTokens(token), "Token is non-salvageable");
     IERC20(token).safeTransfer(recipient, amount);
   }
 
-  /*
-  *   Get the reward, sell it in exchange for underlying, invest what you got.
-  *   It's not much, but it's honest work.
-  *
-  *   Note that although `onlyNotPausedInvesting` is not added here,
-  *   calling `investAllUnderlying()` affectively blocks the usage of `doHardWork`
-  *   when the investing is being paused by governance.
-  */
+  /**
+   * @notice Claims rewards, sells them, and reinvests in the reward pool.
+   */
   function doHardWork() external onlyNotPausedInvesting restricted {
     _claimRewards();
     _liquidateReward();
     _investAllUnderlying();
   }
 
+  /**
+   * @notice Updates the gauge address and reinvests all funds in the new gauge.
+   * @param _newGauge Address of the new gauge.
+   */
   function setGauge(address _newGauge) external onlyGovernance {
     _withdrawUnderlyingFromPool(_rewardPoolBalance());
     _claimRewards();
@@ -279,18 +306,23 @@ contract AerodromeVolatileStrategy is BaseUpgradeableStrategy {
     address _lpt = IGauge(_newGauge).stakingToken();
     require(_lpt == underlying(), "Underlying mismatch");
 
+    address oldGauge = rewardPool();
     _setRewardPool(_newGauge);
     _investAllUnderlying();
+    emit GaugeChanged(oldGauge, _newGauge);
   }
 
   /**
-  * Can completely disable claiming UNI rewards and selling. Good for emergency withdraw in the
-  * simplest possible way.
-  */
+   * @notice Enables or disables the selling of rewards for the strategy.
+   * @param s Boolean to enable or disable selling.
+   */
   function setSell(bool s) public onlyGovernance {
     _setSell(s);
   }
 
+  /**
+   * @notice Finalizes the strategy upgrade.
+   */
   function finalizeUpgrade() external onlyGovernance {
     _finalizeUpgrade();
   }

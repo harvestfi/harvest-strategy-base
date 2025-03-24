@@ -8,7 +8,7 @@ async function main() {
   prompt.start();
   const addresses = require("../test/test-config.js");
 
-  const {id, vaultAddr, strategyName} = await prompt.get(['vaultAddr', 'strategyName']);
+  const {vaultAddr, strategyName} = await prompt.get(['vaultAddr', 'strategyName']);
 
   const StrategyImpl = artifacts.require(strategyName);
   const impl = await type2Transaction(StrategyImpl.new);
@@ -24,6 +24,11 @@ async function main() {
   await type2Transaction(strategy.initializeStrategy, addresses.Storage, vaultAddr);
 
   console.log("Deployment complete. New strategy deployed and initialised at", proxy.creates);
+  const result = {}
+  result.vault = vaultAddr
+  result.strategy = proxy.creates
+
+  console.log(result)
 }
 
 main()
