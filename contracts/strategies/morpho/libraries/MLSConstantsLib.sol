@@ -31,6 +31,9 @@ library MLSConstantsLib {
     /// @dev The slot of the LLTV(Liq. Loan-To-Value).
     bytes32 internal constant LLTV_SLOT = 0x3026ff2a3e1d5bc232fbed88c368457106225b498851d320cb4714f4c01a49aa;
 
+    /// @dev The slot of the loop mode.
+    bytes32 internal constant LOOP_MODE_SLOT = 0x7fde0c8fed0c67e0aad5548621b7c8c40b238d07cad6735de9a5bffe464c79f6;
+
     /* MOONWELL */
 
     /// @dev The slot of the mToken.
@@ -47,7 +50,4 @@ library MLSConstantsLib {
     /// @dev The slot of the borrow target factor numerator.
     bytes32 internal constant BORROWTARGETFACTORNUMERATOR_SLOT =
         0xa65533f4b41f3786d877c8fdd4ae6d27ada84e1d9c62ea3aca309e9aa03af1cd;
-
-    /// @dev The slot of the fold.
-    bytes32 internal constant FOLD_SLOT = 0x1841be4c16015a744c9fbf595f7c6b32d40278c16c1fc7cf2de88c6348de44ba;
 }

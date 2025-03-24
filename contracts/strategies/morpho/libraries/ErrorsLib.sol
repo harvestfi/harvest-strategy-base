@@ -19,6 +19,9 @@ library ErrorsLib {
     /// @notice Error message for when the LLTV slot is not correct.
     error LLTV_SLOT_NOT_CORRECT();
 
+    /// @notice Error message for when the loop mode slot is not correct.
+    error LOOP_MODE_SLOT_NOT_CORRECT();
+
     /* MOONWELL */
 
     /// @notice Error message for when the mToken slot is not correct.
@@ -32,7 +35,4 @@ library ErrorsLib {
 
     /// @notice Error message for when the borrow target factor numerator slot is not correct.
     error BORROWTARGETFACTORNUMERATOR_SLOT_NOT_CORRECT();
-
-    /// @notice Error message for when the fold slot is not correct.
-    error FOLD_SLOT_NOT_CORRECT();
 }

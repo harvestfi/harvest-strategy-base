@@ -35,6 +35,10 @@ abstract contract StateAccessor is BaseUpgradeableStrategyStorage {
         });
     }
 
+    function getLoopMode() public view returns (bool) {
+        return getBoolean(MLSConstantsLib.LOOP_MODE_SLOT);
+    }
+
     /* MOONWELL */
 
     function getMToken() public view returns (address) {
@@ -51,9 +55,5 @@ abstract contract StateAccessor is BaseUpgradeableStrategyStorage {
 
     function getBorrowTargetFactorNumerator() public view returns (uint256) {
         return getUint256(MLSConstantsLib.BORROWTARGETFACTORNUMERATOR_SLOT);
-    }
-
-    function getFoldStatus() public view returns (bool) {
-        return getBoolean(MLSConstantsLib.FOLD_SLOT);
     }
 }
