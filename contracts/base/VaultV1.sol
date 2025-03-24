@@ -149,6 +149,14 @@ contract VaultV1 is ERC20Upgradeable, IUpgradeSource, ControllableInit, VaultSto
     return _investOnDeposit();
   }
 
+  function setCompoundOnWithdraw(bool value) external onlyGovernance {
+    _setCompoundOnWithdraw(value);
+  }
+
+  function compoundOnWithdraw() public view returns (bool) {
+    return _compoundOnWithdraw();
+  }
+
   modifier whenStrategyDefined() {
     require(address(strategy()) != address(0), "Strategy must be defined");
     _;
@@ -414,6 +422,10 @@ contract VaultV1 is ERC20Upgradeable, IUpgradeSource, ControllableInit, VaultSto
     }
     _burn(owner, numberOfShares);
 
+    if (compoundOnWithdraw()) {
+      IStrategy(strategy()).doHardWork();
+    }
+
     uint256 underlyingAmountToWithdraw = underlyingBalanceWithInvestment()
         .mul(numberOfShares)
         .div(totalSupply);
@@ -460,6 +472,7 @@ contract VaultV1 is ERC20Upgradeable, IUpgradeSource, ControllableInit, VaultSto
    * @notice Finalizes an upgrade by resetting the scheduled implementation and timestamp.
    */
   function finalizeUpgrade() external override onlyGovernance {
+    _setDecimals(ERC20Upgradeable(underlying()).decimals());
     _setNextImplementation(address(0));
     _setNextImplementationTimestamp(0);
   }

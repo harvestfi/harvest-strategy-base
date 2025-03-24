@@ -25,6 +25,8 @@ contract VaultStorage is Initializable {
      */
     bytes32 internal constant _IMPLEMENTATION_SLOT = 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc;
 
+    bytes32 internal constant _COMPOUND_ON_WITHDRAW_SLOT = 0x724ff40d01b658bcc822d9ceb05c9e2f446998b3033585f9bcac7fd7929aaca7;
+
     constructor() {
         assert(_STRATEGY_SLOT == bytes32(uint256(keccak256("eip1967.vaultStorage.strategy")) - 1));
         assert(_UNDERLYING_SLOT == bytes32(uint256(keccak256("eip1967.vaultStorage.underlying")) - 1));
@@ -38,6 +40,7 @@ contract VaultStorage is Initializable {
         assert(_INVEST_ON_DEPOSIT_SLOT == bytes32(uint256(keccak256("eip1967.vaultStorage.investOnDeposit")) - 1));
         assert(_PAUSED_SLOT == bytes32(uint256(keccak256("eip1967.vaultStorage.paused")) - 1));
         assert(_DECIMALS_SLOT == bytes32(uint256(keccak256("eip1967.vaultStorage.decimals")) - 1));
+        assert(_COMPOUND_ON_WITHDRAW_SLOT == bytes32(uint256(keccak256("eip1967.vaultStorage.compoundOnWithdraw")) - 1));
     }
 
     function initialize(
@@ -109,6 +112,14 @@ contract VaultStorage is Initializable {
 
     function _investOnDeposit() internal view returns (bool) {
         return getBoolean(_INVEST_ON_DEPOSIT_SLOT);
+    }
+
+    function _setCompoundOnWithdraw(bool _value) internal {
+        setBoolean(_COMPOUND_ON_WITHDRAW_SLOT, _value);
+    }
+
+    function _compoundOnWithdraw() internal view returns (bool) {
+        return getBoolean(_COMPOUND_ON_WITHDRAW_SLOT);
     }
 
     function _setNextImplementation(address _address) internal {
@@ -191,5 +202,5 @@ contract VaultStorage is Initializable {
         }
     }
 
-    uint256[50] private ______gap;
+    uint256[49] private ______gap;
 }
