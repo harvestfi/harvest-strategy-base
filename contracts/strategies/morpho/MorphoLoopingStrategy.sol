@@ -70,8 +70,8 @@ contract MorphoLoopingStrategy is StrategyOps, MorphoOps, StateSetter {
             revert ErrorsLib.BORROWTARGETFACTORNUMERATOR_SLOT_NOT_CORRECT();
         }
 
-        if (MLSConstantsLib.FOLD_SLOT != bytes32(uint256(keccak256("eip1967.strategyStorage.fold")) - 1)) {
-            revert ErrorsLib.FOLD_SLOT_NOT_CORRECT();
+        if (MLSConstantsLib.LOOP_MODE_SLOT != bytes32(uint256(keccak256("eip1967.strategyStorage.loopMode")) - 1)) {
+            revert ErrorsLib.LOOP_MODE_SLOT_NOT_CORRECT();
         }
     }
 
@@ -160,6 +160,7 @@ contract MorphoLoopingStrategy is StrategyOps, MorphoOps, StateSetter {
         uint256 balance = supplied - borrowed;
 
         _redeemWithFlashloan(Math.min(available, balance), 0);
+        //_redeemWithFlashloan(amountUnderlying, getLoopMode() ? getBorrowTargetFactorNumerator() : 0);
         supplied = MTokenInterface(_mToken).balanceOfUnderlying(address(this));
         if (supplied > 0) MorphoBlueSnippets.withdrawAmount(getMarketParams(), supplied);
     }
@@ -181,19 +182,8 @@ contract MorphoLoopingStrategy is StrategyOps, MorphoOps, StateSetter {
         address _underlying = underlying();
         uint256 underlyingBalance = IERC20(_underlying).balanceOf(address(this));
         if (underlyingBalance > 0) _supplyCollateralWrap(underlyingBalance);
-        if (!getFoldStatus()) return;
+        if (!getLoopMode()) return;
         _depositWithFlashloan();
-    }
-
-    /**
-     * Redeems `amountUnderlying` or fails.
-     */
-    function _redeemPartial(uint256 amountUnderlying) internal {
-        address _underlying = underlying();
-        uint256 balanceBefore = IERC20(_underlying).balanceOf(address(this));
-        _redeemWithFlashloan(amountUnderlying, getFoldStatus() ? getBorrowTargetFactorNumerator() : 0);
-        uint256 balanceAfter = IERC20(_underlying).balanceOf(address(this));
-        require(balanceAfter - balanceBefore >= amountUnderlying, "Unable to withdraw the entire amountUnderlying");
     }
 
     /**
@@ -241,179 +231,6 @@ contract MorphoLoopingStrategy is StrategyOps, MorphoOps, StateSetter {
             if (toRepay > 0) MorphoBlueSnippets.withdrawAmount(marketParams, toRepay);
         }
         IERC20(_underlying).safeTransfer(MLSConstantsLib.BVAULT, toRepay);
-    }
-
-    function _depositWithFlashloan() internal {
-        address _mToken = getMToken();
-        uint256 _denom = getFactorDenominator();
-        uint256 _borrowNum = getBorrowTargetFactorNumerator();
-        // amount we supplied
-        uint256 supplied = MTokenInterface(_mToken).balanceOfUnderlying(address(this));
-        // amount we borrowed
-        uint256 borrowed = MTokenInterface(_mToken).borrowBalanceCurrent(address(this));
-        uint256 balance = supplied - borrowed;
-        uint256 borrowTarget = balance * _borrowNum / (_denom - _borrowNum);
-        uint256 borrowDiff;
-        if (borrowed > borrowTarget) {
-            _redeemPartial(0);
-            borrowDiff = 0;
-        } else {
-            borrowDiff = borrowTarget - borrowed;
-            address _rewardPool = rewardPool();
-            uint256 supplyCap = ComptrollerInterface(_rewardPool).supplyCaps(_mToken);
-            uint256 currentSupplied =
-                MTokenInterface(_mToken).totalSupply() * MTokenInterface(_mToken).exchangeRateCurrent() / 1e18;
-            uint256 borrowCap = ComptrollerInterface(_rewardPool).borrowCaps(_mToken);
-            uint256 totalBorrows = MTokenInterface(_mToken).totalBorrows();
-            uint256 borrowAvail;
-            if (totalBorrows < borrowCap) {
-                borrowAvail = borrowCap - totalBorrows - 1;
-                if (currentSupplied < supplyCap) {
-                    borrowAvail = Math.min(supplyCap - currentSupplied - 2, borrowAvail);
-                } else {
-                    borrowAvail = 0;
-                }
-            } else {
-                borrowAvail = 0;
-            }
-            if (borrowDiff > borrowAvail) {
-                borrowDiff = borrowAvail;
-            }
-        }
-        address _underlying = underlying();
-        uint256 balancerBalance = IERC20(_underlying).balanceOf(MLSConstantsLib.BVAULT);
-
-        if (borrowDiff > balancerBalance) {
-            _depositNoFlash(supplied, borrowed, _mToken, _denom, _borrowNum);
-        } else {
-            address[] memory tokens = new address[](1);
-            uint256[] memory amounts = new uint256[](1);
-            bytes memory userData = abi.encode(0);
-            tokens[0] = underlying();
-            amounts[0] = borrowDiff;
-            makingFlashDeposit = true;
-            IBVault(MLSConstantsLib.BVAULT).flashLoan(address(this), tokens, amounts, userData);
-            makingFlashDeposit = false;
-        }
-    }
-
-    function _redeemWithFlashloan(uint256 amount, uint256 borrowTargetFactorNumerator) internal {
-        address _mToken = getMToken();
-        // amount we supplied
-        uint256 supplied = MTokenInterface(_mToken).balanceOfUnderlying(address(this));
-        // amount we borrowed
-        uint256 borrowed = MTokenInterface(_mToken).borrowBalanceCurrent(address(this));
-        uint256 newBorrowTarget;
-        {
-            uint256 oldBalance = supplied - borrowed;
-            uint256 newBalance = oldBalance - amount;
-            newBorrowTarget =
-                newBalance * borrowTargetFactorNumerator / (getFactorDenominator() - borrowTargetFactorNumerator);
-        }
-        uint256 borrowDiff;
-        if (borrowed < newBorrowTarget) {
-            borrowDiff = 0;
-        } else {
-            borrowDiff = borrowed - newBorrowTarget;
-        }
-        address _underlying = underlying();
-        uint256 balancerBalance = IERC20(_underlying).balanceOf(MLSConstantsLib.BVAULT);
-
-        if (borrowDiff > balancerBalance) {
-            _redeemNoFlash(amount, supplied, borrowed, _mToken, getFactorDenominator(), borrowTargetFactorNumerator);
-        } else {
-            address[] memory tokens = new address[](1);
-            uint256[] memory amounts = new uint256[](1);
-            bytes memory userData = abi.encode(0);
-            tokens[0] = _underlying;
-            amounts[0] = borrowDiff;
-            makingFlashWithdrawal = true;
-            IBVault(MLSConstantsLib.BVAULT).flashLoan(address(this), tokens, amounts, userData);
-            makingFlashWithdrawal = false;
-            if (amount > 0) MorphoBlueSnippets.withdrawAmount(getMarketParams(), amount);
-        }
-    }
-
-    function _depositNoFlash(uint256 supplied, uint256 borrowed, address _mToken, uint256 _denom, uint256 _borrowNum)
-        internal
-    {
-        address _underlying = underlying();
-        uint256 balance = supplied - borrowed;
-        uint256 borrowTarget = balance * _borrowNum / (_denom - _borrowNum);
-        {
-            address _rewardPool = rewardPool();
-            uint256 supplyCap = ComptrollerInterface(_rewardPool).supplyCaps(_mToken);
-            uint256 currentSupplied =
-                MTokenInterface(_mToken).totalSupply() * MTokenInterface(_mToken).exchangeRateCurrent() / 1e18;
-            uint256 borrowCap = ComptrollerInterface(_rewardPool).borrowCaps(_mToken);
-            uint256 totalBorrows = MTokenInterface(_mToken).totalBorrows();
-            uint256 borrowAvail;
-            if (totalBorrows < borrowCap) {
-                borrowAvail = borrowCap - totalBorrows - 1;
-                if (currentSupplied < supplyCap) {
-                    borrowAvail = Math.min(supplyCap - currentSupplied - 2, borrowAvail);
-                } else {
-                    borrowAvail = 0;
-                }
-            } else {
-                borrowAvail = 0;
-            }
-            if (borrowTarget - borrowed > borrowAvail) {
-                borrowTarget = borrowed + borrowAvail;
-            }
-        }
-        while (borrowed < borrowTarget) {
-            uint256 wantBorrow = borrowTarget - borrowed;
-            uint256 maxBorrow = supplied * getCollateralFactorNumerator() / _denom - borrowed;
-            uint256 borrowAmount = Math.min(wantBorrow, maxBorrow);
-            MorphoBlueSnippets.borrow(getMarketParams(), borrowAmount);
-            uint256 underlyingBalance = IERC20(_underlying).balanceOf(address(this));
-            if (underlyingBalance > 0) _supplyCollateralWrap(underlyingBalance);
-            //update parameters
-            borrowed = MTokenInterface(_mToken).borrowBalanceCurrent(address(this));
-            supplied = MTokenInterface(_mToken).balanceOfUnderlying(address(this));
-            balance = supplied - borrowed;
-        }
-    }
-
-    function _redeemNoFlash(
-        uint256 amount,
-        uint256 supplied,
-        uint256 borrowed,
-        address _mToken,
-        uint256 _denom,
-        uint256 _borrowNum
-    ) internal {
-        address _underlying = underlying();
-        uint256 newBorrowTarget;
-        {
-            uint256 oldBalance = supplied - borrowed;
-            uint256 newBalance = oldBalance - amount;
-            newBorrowTarget = newBalance * _borrowNum / (_denom - _borrowNum);
-        }
-        while (borrowed > newBorrowTarget) {
-            uint256 requiredCollateral = borrowed * _denom / getCollateralFactorNumerator();
-            uint256 toRepay = borrowed - newBorrowTarget;
-            // redeem just as much as needed to repay the loan
-            // supplied - requiredCollateral = max redeemable, amount + repay = needed
-            uint256 toRedeem = Math.min(supplied - requiredCollateral, amount + toRepay);
-            if (toRedeem > 0) MorphoBlueSnippets.withdrawAmount(getMarketParams(), toRedeem);
-            // now we can repay our borrowed amount
-            uint256 _underlyingBalance = IERC20(_underlying).balanceOf(address(this));
-            uint256 repayAmount = Math.min(toRepay, _underlyingBalance);
-            MorphoBlueSnippets.repayAmount(getMarketParams(), repayAmount);
-            // update the parameters
-            borrowed = MTokenInterface(_mToken).borrowBalanceCurrent(address(this));
-            supplied = MTokenInterface(_mToken).balanceOfUnderlying(address(this));
-        }
-        uint256 underlyingBalance = IERC20(_underlying).balanceOf(address(this));
-        if (underlyingBalance < amount) {
-            uint256 toRedeem = amount - underlyingBalance;
-            uint256 balance = supplied - borrowed;
-            uint256 redeemAmount = Math.min(toRedeem, balance);
-            // redeem the most we can redeem
-            if (redeemAmount > 0) MorphoBlueSnippets.withdrawAmount(getMarketParams(), redeemAmount);
-        }
     }
 
     function finalizeUpgrade() external onlyGovernance {
