@@ -25,6 +25,7 @@ contract MoonwellFoldStrategyV2Mainnet_cbBTC is MoonwellFoldStrategyV2 {
       well,
       0,
       810,
+      1000,
       false
     );
     rewardTokens = [well];

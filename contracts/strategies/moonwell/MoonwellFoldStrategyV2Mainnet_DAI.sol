@@ -27,6 +27,7 @@ contract MoonwellFoldStrategyV2Mainnet_DAI is MoonwellFoldStrategyV2 {
       usdc,
       800,
       820,
+      1000,
       true
     );
     rewardTokens = [well, usdc, well_new];
