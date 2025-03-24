@@ -37,13 +37,7 @@ async function setupCoreProtocol(config) {
     vault = await CLVault.at(vaultAsProxy.address);
     const nftToken = await IERC721.at(config.CLSetup.posManager);
     await nftToken.approve(vault.address, config.CLSetup.posId, { from: config.Governance })
-    await vault.initializeVault(
-      addresses.Storage,
-      config.CLSetup.posId,
-      config.CLSetup.posManager,
-      config.CLSetup.targetWidth,
-      { from: config.Governance }
-    );
+    await vault.initializeVault(addresses.Storage, config.CLSetup.posId, config.CLSetup.posManager, { from: config.Governance });
     console.log("New Vault Deployed: ", vault.address);
   } else {
     const implAddress = config.vaultImplementationOverride || addresses.VaultImplementation;

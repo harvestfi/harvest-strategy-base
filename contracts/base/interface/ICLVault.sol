@@ -6,9 +6,7 @@ interface ICLVault {
     function initializeVault(
         address _storage,
         uint256 _posId,
-        address _posManager,
-        uint256 _posWidth,
-        uint256 _targetWidth
+        address _posManager
     ) external;
 
     function balanceOf(address _holder) external view returns (uint256);
@@ -53,18 +51,11 @@ interface ICLVault {
 
     function underlyingBalanceWithInvestmentForHolder(address _holder) view external returns (uint256);
 
-    function totalSupply() external view returns (uint256);
-
     /**
      * This should be callable only by the controller (by the hard worker) or by governance
      */
     function doHardWork() external;
-    
-    function getSqrtPriceX96() external view returns (uint160);
-    function getCurrentTick() external view returns (int24);
-    function inRange() external view returns (bool);
+
     function getCurrentTokenAmounts() external view returns (uint256, uint256);
     function getCurrentTokenWeights() external view returns (uint256, uint256);
-
-    function checker() external view returns (bool, bytes memory);
 }
