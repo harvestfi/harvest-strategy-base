@@ -14,7 +14,7 @@ const IERC20 = artifacts.require("IERC20");
 //const Strategy = artifacts.require("");
 const Strategy = artifacts.require("CompoundStrategyMainnet_USDC");
 
-// Developed and tested at blockNumber 22742745
+// Developed and tested at blockNumber 3345960
 
 // Vanilla Mocha test. Increased compatibility with tools that integrate Mocha.
 describe("Arbitrum Mainnet Compound USDC", function() {
@@ -24,7 +24,7 @@ describe("Arbitrum Mainnet Compound USDC", function() {
   let underlying;
 
   // external setup
-  let underlyingWhale = "0x28c524ac2A95E2eA76a971085799FB27f45eE215";
+  let underlyingWhale = "0x20f03E26968B179025F65C1f4aFAdFD3959C8d03";
   let comp = "0x9e1028F5F1D5eDE59748FFceE5532509976840E0";
 
   // parties in the protocol
@@ -40,7 +40,7 @@ describe("Arbitrum Mainnet Compound USDC", function() {
   let strategy;
 
   async function setupExternalContracts() {
-    underlying = await IERC20.at("0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913");
+    underlying = await IERC20.at("0xd9aAEc86B65D86f6A7B5B1b0c42FFA531710b6CA");
     console.log("Fetching Underlying at: ", underlying.address);
   }
 
@@ -71,7 +71,7 @@ describe("Arbitrum Mainnet Compound USDC", function() {
       "strategyArtifactIsUpgradable": true,
       "underlying": underlying,
       "governance": governance,
-      // "liquidation": [{"uniV3": [comp, underlying.address]}]
+      "liquidation": [{"uniV3": [comp, underlying.address]}]
     });
 
     // whale send underlying to farmers
