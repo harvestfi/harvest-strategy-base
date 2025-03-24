@@ -122,13 +122,15 @@ contract MoonwellFoldStrategyV2 is BaseUpgradeableStrategy {
   function _handleFee() internal {
     _accrueFee();
     uint256 fee = pendingFee();
-    if (fee > 1e13) {
+    if (fee > 1e3) {
+      uint256 balanceIncrease = fee.mul(feeDenominator()).div(totalFeeNumerator());
       _redeem(fee);
       address _underlying = underlying();
-      fee = Math.min(fee, IERC20(_underlying).balanceOf(address(this)));
-      uint256 balanceIncrease = fee.mul(feeDenominator()).div(totalFeeNumerator());
+      if (IERC20(_underlying).balanceOf(address(this)) < fee) {
+        balanceIncrease = IERC20(_underlying).balanceOf(address(this)).mul(feeDenominator()).div(totalFeeNumerator());
+      }
       _notifyProfitInRewardToken(_underlying, balanceIncrease);
-      setUint256(_PENDING_FEE_SLOT, pendingFee().sub(fee));
+      setUint256(_PENDING_FEE_SLOT, 0);
     }
   }
 
@@ -522,10 +524,7 @@ contract MoonwellFoldStrategyV2 is BaseUpgradeableStrategy {
     }
     while (borrowed < borrowTarget) {
       uint256 wantBorrow = borrowTarget.sub(borrowed);
-      uint256 maxBorrow = Math.min(
-        supplied.mul(collateralFactorNumerator()).div(uint(1000)).sub(borrowed),
-        MTokenInterface(_mToken).getCash()
-      );
+      uint256 maxBorrow = supplied.mul(collateralFactorNumerator()).div(uint(1000)).sub(borrowed);
       _borrow(Math.min(wantBorrow, maxBorrow));
       uint256 underlyingBalance = IERC20(_underlying).balanceOf(address(this));
       if (underlyingBalance > 0) {
@@ -551,10 +550,7 @@ contract MoonwellFoldStrategyV2 is BaseUpgradeableStrategy {
       uint256 toRepay = borrowed.sub(newBorrowTarget);
       // redeem just as much as needed to repay the loan
       // supplied - requiredCollateral = max redeemable, amount + repay = needed
-      uint256 toRedeem = Math.min(
-        Math.min(supplied.sub(requiredCollateral), amount.add(toRepay)),
-        MTokenInterface(_mToken).getCash()
-      );
+      uint256 toRedeem = Math.min(supplied.sub(requiredCollateral), amount.add(toRepay));
       _redeem(toRedeem);
       // now we can repay our borrowed amount
       uint256 underlyingBalance = IERC20(_underlying).balanceOf(address(this));

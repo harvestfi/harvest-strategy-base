@@ -13,7 +13,7 @@ const IERC20 = artifacts.require("IERC20");
 //const Strategy = artifacts.require("");
 const Strategy = artifacts.require("MoonwellFoldStrategyV2Mainnet_USDS");
 
-// Developed and tested at blockNumber 26246450
+// Developed and tested at blockNumber 25949800
 
 // Vanilla Mocha test. Increased compatibility with tools that integrate Mocha.
 describe("Base Mainnet Moonwell USDS", function() {
@@ -24,6 +24,9 @@ describe("Base Mainnet Moonwell USDS", function() {
 
   // external setup
   let underlyingWhale = "0xF9b568c4A7f3481b609f54c269b3247D6d2f80f2";
+  let well = "0xA88594D404727625A9437C3f886C7643872296AE";
+  let weth = "0x4200000000000000000000000000000000000006";
+  let usdc = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
 
   // parties in the protocol
   let governance;
@@ -65,12 +68,20 @@ describe("Base Mainnet Moonwell USDS", function() {
 
     await setupExternalContracts();
     [controller, vault, strategy] = await setupCoreProtocol({
-      "existingVaultAddress": "0x2f4Ab0c54aE22bE66A1b273D11b28c001a61b871",
-      "upgradeStrategy": true,
+      "existingVaultAddress": null,
       "strategyArtifact": Strategy,
       "strategyArtifactIsUpgradable": true,
       "underlying": underlying,
       "governance": governance,
+      "liquidation": [
+        // {"aerodrome": [well, weth, lbtc]},
+        {"uniV3": [underlying.address, usdc, weth]},
+        {"uniV3": [weth, usdc, underlying.address]},
+      ],
+      "uniV3Fee": [
+        [underlying.address, usdc, 3000],
+      ],
+      "ULOwner": addresses.ULOwner
     });
 
     // whale send underlying to farmers
@@ -89,14 +100,6 @@ describe("Base Mainnet Moonwell USDS", function() {
 
       for (let i = 0; i < hours; i++) {
         console.log("loop ", i);
-
-        if (i == 0) {
-          await strategy.setBorrowTargetFactorNumerator(810, {from:governance});
-        } else if (i == 4) {
-          await strategy.setBorrowTargetFactorNumerator(0, {from:governance});
-        } else if (i == 8) {
-          await strategy.setBorrowTargetFactorNumerator(810, {from:governance});
-        }
 
         oldSharePrice = new BigNumber(await vault.getPricePerFullShare());
         await controller.doHardWork(vault.address, { from: governance });
