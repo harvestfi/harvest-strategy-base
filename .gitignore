@@ -7,7 +7,6 @@ deployments
 
 scripts/core
 
-.env
 secret.json
 secret*.json
 dev-keys.json
