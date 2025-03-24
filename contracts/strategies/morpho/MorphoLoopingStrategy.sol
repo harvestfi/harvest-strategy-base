@@ -5,19 +5,18 @@ import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {MarketParams} from "@morpho-org/morpho-blue/src/interfaces/IMorpho.sol";
 import {MarketParamsLib} from "@morpho-org/morpho-blue/src/libraries/MarketParamsLib.sol";
+import "../../base/interface/IUniversalLiquidator.sol";
 import "../../base/upgradability/BaseUpgradeableStrategy.sol";
-import "../../base/interface/moonwell/ComptrollerInterface.sol";
+import "../../base/interface/moonwell/MTokenInterfaces.sol";
 
-import {DepositActions} from "./utils/AssetOps.sol";
-import {MorphoOps} from "./utils/MorphoOps.sol";
-import {StrategyOps} from "./utils/StrategyOps.sol";
-import {StateSetter} from "./utils/StateSetter.sol";
-import {Checks} from "./utils/Checks.sol";
 import {MLSConstantsLib} from "./libraries/MLSConstantsLib.sol";
 import {ErrorsLib} from "./libraries/ErrorsLib.sol";
 import {MorphoBlueSnippets} from "./libraries/MorphoBlueLib.sol";
+import {StrategyOps} from "./utils/StrategyOps.sol";
+import {StateSetter} from "./utils/StateSetter.sol";
+import {DepositActions} from "./utils/AssetOps.sol";
 
-contract MorphoLoopingStrategy is StrategyOps, MorphoOps, StateSetter {
+contract MorphoLoopingStrategy is StrategyOps, StateSetter, DepositActions {
     using SafeERC20 for IERC20;
     using MarketParamsLib for MarketParams;
 
@@ -82,7 +81,7 @@ contract MorphoLoopingStrategy is StrategyOps, MorphoOps, StateSetter {
         uint256 _borrowTargetFactorNumerator,
         uint256 _collateralFactorNumerator,
         uint256 _factorDenominator,
-        bool _fold
+        bool _loopMode
     ) public initializer {
         BaseUpgradeableStrategy.initialize(
             _storage, _underlying, _vault, _comptroller, _rewardToken, MLSConstantsLib.HARVEST_MSIG
@@ -97,7 +96,7 @@ contract MorphoLoopingStrategy is StrategyOps, MorphoOps, StateSetter {
         _setFactorDenominator(_factorDenominator);
         setUint256(MLSConstantsLib.COLLATERALFACTORNUMERATOR_SLOT, _collateralFactorNumerator);
         setUint256(MLSConstantsLib.BORROWTARGETFACTORNUMERATOR_SLOT, _borrowTargetFactorNumerator);
-        setBoolean(MLSConstantsLib.FOLD_SLOT, _fold);
+        setBoolean(MLSConstantsLib.LOOP_MODE_SLOT, _loopMode);
         address[] memory markets = new address[](1);
         markets[0] = _mToken;
         ComptrollerInterface(_comptroller).enterMarkets(markets);
