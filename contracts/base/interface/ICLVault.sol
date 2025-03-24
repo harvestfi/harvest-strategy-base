@@ -41,7 +41,9 @@ interface ICLVault {
 
     function announceStrategyUpdate(address _strategy) external;
 
-    function deposit(uint256 _amount0, uint256 _amount1, uint256 _amountOutMin, address _receiver) external returns(uint256);
+    function deposit(uint256 _amount0, uint256 _amount1, uint256 _amountOutMin) external returns(uint256);
+
+    function depositFor(uint256 _amount0, uint256 _amount1, uint256 _amountOutMin, address _receiver) external returns(uint256);
 
     function withdrawAll() external;
 
