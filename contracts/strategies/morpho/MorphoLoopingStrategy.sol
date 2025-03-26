@@ -202,32 +202,6 @@ contract MorphoLoopingStrategy is StrategyOps, StateSetter, DepositActions {
             - MorphoBlueSnippets.borrowAssetsUser(marketParams, address(this));
     }
 
-    function receiveFlashLoan(
-        IERC20[] memory, /*tokens*/
-        uint256[] memory amounts,
-        uint256[] memory feeAmounts,
-        bytes memory /*userData*/
-    ) external {
-        require(msg.sender == MLSConstantsLib.BVAULT);
-        require(!makingFlashDeposit || !makingFlashWithdrawal, "Only one can be true");
-        require(makingFlashDeposit || makingFlashWithdrawal, "One has to be true");
-        address _underlying = underlying();
-        uint256 toRepay = amounts[0] + feeAmounts[0];
-        MarketParams memory marketParams = getMarketParams();
-        if (makingFlashDeposit) {
-            _supplyCollateralWrap(amounts[0]);
-            if (toRepay > 0) MorphoBlueSnippets.borrow(marketParams, toRepay);
-        } else {
-            address _mToken = getMToken();
-            uint256 borrowed = MTokenInterface(_mToken).borrowBalanceCurrent(address(this));
-            uint256 repaying = Math.min(amounts[0], borrowed);
-            IERC20(_underlying).safeIncreaseAllowance(_mToken, repaying);
-            if (repaying > 0) MorphoBlueSnippets.repayAmount(marketParams, repaying);
-            if (toRepay > 0) MorphoBlueSnippets.withdrawAmount(marketParams, toRepay);
-        }
-        IERC20(_underlying).safeTransfer(MLSConstantsLib.BVAULT, toRepay);
-    }
-
     function finalizeUpgrade() external onlyGovernance {
         _finalizeUpgrade();
     }
