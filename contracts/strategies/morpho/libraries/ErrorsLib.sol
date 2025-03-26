@@ -22,6 +22,17 @@ library ErrorsLib {
     /// @notice Error message for when the loop mode slot is not correct.
     error LOOP_MODE_SLOT_NOT_CORRECT();
 
+    /* FLASH LOAN */
+
+    /// @notice Error message for when the flash loan caller is invalid.
+    error INVALID_FLASH_LOAN_CALLER();
+
+    /// @notice Error message for when the flash loan is already in progress.
+    error FLASH_LOAN_ALREADY_IN_PROGRESS();
+
+    /// @notice Error message for when the flash loan is not in progress.
+    error FLASH_LOAN_NOT_IN_PROGRESS();
+
     /* MOONWELL */
 
     /// @notice Error message for when the mToken slot is not correct.
