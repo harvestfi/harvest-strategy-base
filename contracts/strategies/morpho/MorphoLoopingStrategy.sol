@@ -7,6 +7,7 @@ import {MarketParams} from "@morpho-org/morpho-blue/src/interfaces/IMorpho.sol";
 import {MarketParamsLib} from "@morpho-org/morpho-blue/src/libraries/MarketParamsLib.sol";
 import "../../base/interface/IUniversalLiquidator.sol";
 import "../../base/upgradability/BaseUpgradeableStrategy.sol";
+import "../../base/interface/IRewardPrePay.sol";
 import "../../base/interface/moonwell/MTokenInterfaces.sol";
 
 import {MLSConstantsLib} from "./libraries/MLSConstantsLib.sol";
@@ -40,6 +41,17 @@ contract MorphoLoopingStrategy is StrategyOps, StateSetter, DepositActions {
             revert ErrorsLib.LLTV_SLOT_NOT_CORRECT();
         }
 
+        if (MLSConstantsLib.LOOP_MODE_SLOT != bytes32(uint256(keccak256("eip1967.strategyStorage.loopMode")) - 1)) {
+            revert ErrorsLib.LOOP_MODE_SLOT_NOT_CORRECT();
+        }
+
+        if (
+            MLSConstantsLib.MORPHO_PRE_PAY_SLOT
+                != bytes32(uint256(keccak256("eip1967.strategyStorage.morphoPrePay")) - 1)
+        ) {
+            revert ErrorsLib.MORPHO_PRE_PAY_SLOT_NOT_CORRECT();
+        }
+
         if (MLSConstantsLib.MTOKEN_SLOT != bytes32(uint256(keccak256("eip1967.strategyStorage.mToken")) - 1)) {
             revert ErrorsLib.MTOKEN_SLOT_NOT_CORRECT();
         }
@@ -64,10 +76,6 @@ contract MorphoLoopingStrategy is StrategyOps, StateSetter, DepositActions {
         ) {
             revert ErrorsLib.BORROWTARGETFACTORNUMERATOR_SLOT_NOT_CORRECT();
         }
-
-        if (MLSConstantsLib.LOOP_MODE_SLOT != bytes32(uint256(keccak256("eip1967.strategyStorage.loopMode")) - 1)) {
-            revert ErrorsLib.LOOP_MODE_SLOT_NOT_CORRECT();
-        }
     }
 
     /// Checkpoint
@@ -75,31 +83,29 @@ contract MorphoLoopingStrategy is StrategyOps, StateSetter, DepositActions {
         address _storage,
         address _underlying,
         address _vault,
-        address _mToken,
-        address _comptroller,
+        address _morphoVault,
         address _rewardToken,
+        address _morphoPrePay,
         uint256 _borrowTargetFactorNumerator,
         uint256 _collateralFactorNumerator,
         uint256 _factorDenominator,
-        bool _loopMode
+        bool _loopMode,
+        address _mToken
     ) public initializer {
         BaseUpgradeableStrategy.initialize(
-            _storage, _underlying, _vault, _comptroller, _rewardToken, MLSConstantsLib.HARVEST_MSIG
+            _storage, _underlying, _vault, _morphoVault, _rewardToken, MLSConstantsLib.HARVEST_MSIG
         );
-
-        require(MErc20Interface(_mToken).underlying() == _underlying, "Underlying mismatch");
-
-        _setMToken(_mToken);
 
         require(_collateralFactorNumerator < _factorDenominator, "Numerator should be smaller than denominator");
         require(_borrowTargetFactorNumerator < _collateralFactorNumerator, "Target should be lower than limit");
+        _setMorphoPrePay(_morphoPrePay);
         _setFactorDenominator(_factorDenominator);
         setUint256(MLSConstantsLib.COLLATERALFACTORNUMERATOR_SLOT, _collateralFactorNumerator);
         setUint256(MLSConstantsLib.BORROWTARGETFACTORNUMERATOR_SLOT, _borrowTargetFactorNumerator);
         setBoolean(MLSConstantsLib.LOOP_MODE_SLOT, _loopMode);
-        address[] memory markets = new address[](1);
-        markets[0] = _mToken;
-        ComptrollerInterface(_comptroller).enterMarkets(markets);
+
+        require(MErc20Interface(_mToken).underlying() == _underlying, "Underlying mismatch");
+        _setMToken(_mToken);
     }
 
     /**
@@ -164,8 +170,7 @@ contract MorphoLoopingStrategy is StrategyOps, StateSetter, DepositActions {
      * Withdraws all assets, liquidates XVS, and invests again in the required ratio.
      */
     function doHardWork() public restricted {
-        // TODO: remove this once we have a proper reward claiming mechanism
-        ComptrollerInterface(rewardPool()).claimReward();
+        IRewardPrePay(getMorphoPrePay()).claim();
         _liquidateRewards(sell(), rewardToken(), universalLiquidator(), underlying());
         _investAllUnderlying();
     }
