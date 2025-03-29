@@ -39,6 +39,10 @@ abstract contract StateAccessor is BaseUpgradeableStrategyStorage {
         return getBoolean(MLSConstantsLib.LOOP_MODE_SLOT);
     }
 
+    function getMorphoPrePay() public view returns (address) {
+        return getAddress(MLSConstantsLib.MORPHO_PRE_PAY_SLOT);
+    }
+
     /* MOONWELL */
 
     function getMToken() public view returns (address) {

@@ -22,6 +22,9 @@ library ErrorsLib {
     /// @notice Error message for when the loop mode slot is not correct.
     error LOOP_MODE_SLOT_NOT_CORRECT();
 
+    /// @notice Error message for when the morpho pre pay slot is not correct.
+    error MORPHO_PRE_PAY_SLOT_NOT_CORRECT();
+
     /* FLASH LOAN */
 
     /// @notice Error message for when the flash loan caller is invalid.

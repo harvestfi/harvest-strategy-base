@@ -34,6 +34,9 @@ library MLSConstantsLib {
     /// @dev The slot of the loop mode.
     bytes32 internal constant LOOP_MODE_SLOT = 0x7fde0c8fed0c67e0aad5548621b7c8c40b238d07cad6735de9a5bffe464c79f6;
 
+    /// @dev The slot of the morpho pre pay.
+    bytes32 internal constant MORPHO_PRE_PAY_SLOT = 0x15ef0a518c284159ce00448aabf99b63238d88ae2c512063daf55e149525d49d;
+
     /* MOONWELL */
 
     /// @dev The slot of the mToken.
