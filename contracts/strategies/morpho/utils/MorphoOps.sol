@@ -6,12 +6,24 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
 import {MarketParams} from "@morpho-org/morpho-blue/src/interfaces/IMorpho.sol";
 
 import {BaseUpgradeableStrategyStorage} from "../../../base/upgradability/BaseUpgradeableStrategyStorage.sol";
+import {IRewardPrePay} from "../../../base/interface/IRewardPrePay.sol";
 import {MLSConstantsLib} from "../libraries/MLSConstantsLib.sol";
 import {MorphoBlueSnippets} from "../libraries/MorphoBlueLib.sol";
+import {Checks} from "./Checks.sol";
 import {StateAccessor} from "./StateAccessor.sol";
 
-abstract contract MorphoOps is BaseUpgradeableStrategyStorage, StateAccessor {
+abstract contract MorphoOps is BaseUpgradeableStrategyStorage, StateAccessor, Checks {
     using SafeERC20 for IERC20;
+
+    function morphoClaim(address distr, bytes calldata txData) external onlyRewardPrePayOrGovernance {
+        address _morphoPrePay = getMorphoPrePay();
+        address morpho = IRewardPrePay(_morphoPrePay).MORPHO();
+        uint256 balanceBefore = IERC20(morpho).balanceOf(address(this));
+        (bool success,) = distr.call(txData);
+        require(success, "Claim failed");
+        uint256 claimed = IERC20(morpho).balanceOf(address(this)) - balanceBefore;
+        IERC20(morpho).safeTransfer(_morphoPrePay, claimed);
+    }
 
     function _supplyCollateralWrap(uint256 amount) internal {
         if (amount == 0) return;
