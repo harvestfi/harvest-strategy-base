@@ -108,64 +108,6 @@ contract MorphoLoopingStrategy is StrategyOps, StateSetter, DepositActions {
     }
 
     /**
-     * Exits Moonwell and transfers everything to the vault.
-     */
-    function withdrawAllToVault() public restricted {
-        address _underlying = underlying();
-        ComptrollerInterface(rewardPool()).claimReward();
-        _liquidateRewards(sell(), rewardToken(), universalLiquidator(), _underlying);
-        _withdrawMaximum();
-        if (IERC20(_underlying).balanceOf(address(this)) > 0) {
-            IERC20(_underlying).safeTransfer(vault(), IERC20(_underlying).balanceOf(address(this)));
-        }
-    }
-
-    function emergencyExit() external onlyGovernance {
-        _withdrawMaximum();
-    }
-
-    function withdrawToVault(uint256 amountUnderlying) public restricted {
-        address _underlying = underlying();
-        uint256 balance = IERC20(_underlying).balanceOf(address(this));
-        if (amountUnderlying <= balance) {
-            IERC20(_underlying).safeTransfer(vault(), amountUnderlying);
-            return;
-        }
-        uint256 toRedeem = amountUnderlying - balance;
-        // get some of the underlying
-        _redeemPartial(toRedeem);
-        // transfer the amount requested (or the amount we have) back to vault()
-        IERC20(_underlying).safeTransfer(vault(), amountUnderlying);
-        balance = IERC20(_underlying).balanceOf(address(this));
-        if (balance > 0) {
-            _investAllUnderlying();
-        }
-    }
-
-    /**
-     * Redeems maximum that can be redeemed from Venus.
-     * Redeem the minimum of the underlying we own, and the underlying that the vToken can
-     * immediately retrieve. Ensures that `redeemMaximum` doesn't fail silently.
-     *
-     * DOES NOT ensure that the strategy vUnderlying balance becomes 0.
-     */
-    function _withdrawMaximum() internal {
-        address _mToken = getMToken();
-        // amount of liquidity in Radiant
-        uint256 available = MTokenInterface(_mToken).getCash();
-        // amount we supplied
-        uint256 supplied = MTokenInterface(_mToken).balanceOfUnderlying(address(this));
-        // amount we borrowed
-        uint256 borrowed = MTokenInterface(_mToken).borrowBalanceCurrent(address(this));
-        uint256 balance = supplied - borrowed;
-
-        _redeemWithFlashloan(Math.min(available, balance), 0);
-        //_redeemWithFlashloan(amountUnderlying, getLoopMode() ? getBorrowTargetFactorNumerator() : 0);
-        supplied = MTokenInterface(_mToken).balanceOfUnderlying(address(this));
-        if (supplied > 0) MorphoBlueSnippets.withdrawAmount(getMarketParams(), supplied);
-    }
-
-    /**
      * Withdraws all assets, liquidates XVS, and invests again in the required ratio.
      */
     function doHardWork() public restricted {
@@ -184,15 +126,6 @@ contract MorphoLoopingStrategy is StrategyOps, StateSetter, DepositActions {
         if (underlyingBalance > 0) _supplyCollateralWrap(underlyingBalance);
         if (!getLoopMode()) return;
         _depositWithFlashloan();
-    }
-
-    /**
-     * Salvages a token.
-     */
-    function salvage(address recipient, address token, uint256 amount) public onlyGovernance {
-        // To make sure that governance cannot come in and take away the coins
-        require(!unsalvagableTokens(token), "token is defined as not salvagable");
-        IERC20(token).safeTransfer(recipient, amount);
     }
 
     /**
