@@ -49,4 +49,9 @@ library ErrorsLib {
 
     /// @notice Error message for when the borrow target factor numerator slot is not correct.
     error BORROWTARGETFACTORNUMERATOR_SLOT_NOT_CORRECT();
+
+    /* UTILS */
+
+    /// @notice Error message for when the token is not salvagable.
+    error TokenNotSalvagable(address token);
 }
