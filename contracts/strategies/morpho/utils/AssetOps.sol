@@ -210,13 +210,8 @@ abstract contract WithdrawActions is DepositActions {
     using SafeERC20 for IERC20;
     using MarketParamsLib for MarketParams;
 
-    /**
-     * Redeems maximum that can be redeemed from Venus.
-     * Redeem the minimum of the underlying we own, and the underlying that the vToken can
-     * immediately retrieve. Ensures that `redeemMaximum` doesn't fail silently.
-     *
-     * DOES NOT ensure that the strategy vUnderlying balance becomes 0.
-     */
+    /// @notice Redeems maximum that can be redeemed from Morpho.
+    /// This is the amount of collateral that can be removed from Morpho.
     function _withdrawMaximum() internal {
         MarketParams memory marketParams = getMarketParams();
         // TODO: Confirm if we can remove this, I think yes, cause all collateral should be removable it will remain untouch
