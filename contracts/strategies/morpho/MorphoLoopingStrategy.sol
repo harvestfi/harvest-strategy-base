@@ -12,11 +12,10 @@ import "../../base/interface/moonwell/MTokenInterfaces.sol";
 import {MLSConstantsLib} from "./libraries/MLSConstantsLib.sol";
 import {ErrorsLib} from "./libraries/ErrorsLib.sol";
 import {MorphoBlueSnippets} from "./libraries/MorphoBlueLib.sol";
-import {StrategyOps} from "./utils/StrategyOps.sol";
+import {WithdrawActions} from "./utils/AssetOps.sol";
 import {StateSetter} from "./utils/StateSetter.sol";
-import {DepositActions} from "./utils/AssetOps.sol";
 
-contract MorphoLoopingStrategy is StrategyOps, StateSetter, DepositActions {
+contract MorphoLoopingStrategy is WithdrawActions, StateSetter {
     using SafeERC20 for IERC20;
     using MarketParamsLib for MarketParams;
 
@@ -115,17 +114,6 @@ contract MorphoLoopingStrategy is StrategyOps, StateSetter, DepositActions {
         IRewardPrePay(getMorphoPrePay()).claim();
         _liquidateRewards(sell(), rewardToken(), universalLiquidator(), underlying());
         _investAllUnderlying();
-    }
-
-    /**
-     * The strategy invests by supplying the underlying as a collateral.
-     */
-    function _investAllUnderlying() internal onlyNotPausedInvesting {
-        address _underlying = underlying();
-        uint256 underlyingBalance = IERC20(_underlying).balanceOf(address(this));
-        if (underlyingBalance > 0) _supplyCollateralWrap(underlyingBalance);
-        if (!getLoopMode()) return;
-        _depositWithFlashloan();
     }
 
     /**
