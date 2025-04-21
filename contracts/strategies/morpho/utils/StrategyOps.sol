@@ -3,9 +3,10 @@ pragma solidity 0.8.26;
 
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import {IUniversalLiquidator} from "../../../base/interface/IUniversalLiquidator.sol";
 import {BaseUpgradeableStrategy} from "../../../base/upgradability/BaseUpgradeableStrategy.sol";
+import {IUniversalLiquidator} from "../../../base/interface/IUniversalLiquidator.sol";
 import {ErrorsLib} from "../libraries/ErrorsLib.sol";
+import {StateAccessor} from "./StateAccessor.sol";
 import {Checks} from "./Checks.sol";
 
 /// @title StrategyOps
@@ -13,7 +14,7 @@ import {Checks} from "./Checks.sol";
 /// @notice The StrategyOps contract.
 /// @dev This contract can be turned into an library in the future after BaseUpgradeableStrategy is modularized.
 
-abstract contract StrategyOps is BaseUpgradeableStrategy, Checks {
+abstract contract StrategyOps is BaseUpgradeableStrategy, StateAccessor, Checks {
     using SafeERC20 for IERC20;
 
     /// @dev Reset on each upgrade

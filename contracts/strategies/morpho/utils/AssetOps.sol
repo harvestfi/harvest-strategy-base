@@ -6,16 +6,15 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 import {MarketParams} from "@morpho-org/morpho-blue/src/interfaces/IMorpho.sol";
 import {MarketParamsLib} from "@morpho-org/morpho-blue/src/libraries/MarketParamsLib.sol";
-import {BaseUpgradeableStrategyStorage} from "../../../base/upgradability/BaseUpgradeableStrategyStorage.sol";
+import {IRewardPrePay} from "../../../base/interface/IRewardPrePay.sol";
 import {IBVault} from "../../../base/interface/balancer/IBVault.sol";
-import {MorphoOps} from "./MorphoOps.sol";
-import {StateAccessor} from "./StateAccessor.sol";
 import {MLSConstantsLib} from "../libraries/MLSConstantsLib.sol";
 import {MorphoBlueSnippets} from "../libraries/MorphoBlueLib.sol";
 import {ErrorsLib} from "../libraries/ErrorsLib.sol";
 import {IMorphoLoopingStrategy} from "../interfaces/IMorphoLoopingStrategy.sol";
+import {MorphoOps} from "./MorphoOps.sol";
 
-abstract contract FlashLoanActions is BaseUpgradeableStrategyStorage, MorphoOps {
+abstract contract FlashLoanActions is MorphoOps {
     using SafeERC20 for IERC20;
 
     bool internal makingFlashLoan;
@@ -61,7 +60,7 @@ abstract contract FlashLoanActions is BaseUpgradeableStrategyStorage, MorphoOps 
     }
 }
 
-abstract contract RedeemActions is BaseUpgradeableStrategyStorage, FlashLoanActions {
+abstract contract RedeemActions is FlashLoanActions {
     using MarketParamsLib for MarketParams;
 
     function _redeemPartial(uint256 amountUnderlying) internal {
@@ -133,67 +132,7 @@ abstract contract RedeemActions is BaseUpgradeableStrategyStorage, FlashLoanActi
     }
 }
 
-abstract contract WithdrawActions is BaseUpgradeableStrategyStorage, RedeemActions {
-    /**
-     * Exits Moonwell and transfers everything to the vault.
-     */
-    function withdrawAllToVault() public restricted {
-        address _underlying = underlying();
-        ComptrollerInterface(rewardPool()).claimReward();
-        _liquidateRewards(sell(), rewardToken(), universalLiquidator(), _underlying);
-        _withdrawMaximum();
-        if (IERC20(_underlying).balanceOf(address(this)) > 0) {
-            IERC20(_underlying).safeTransfer(vault(), IERC20(_underlying).balanceOf(address(this)));
-        }
-    }
-
-    function emergencyExit() external onlyGovernance {
-        _withdrawMaximum();
-    }
-
-    function withdrawToVault(uint256 amountUnderlying) public restricted {
-        address _underlying = underlying();
-        uint256 balance = IERC20(_underlying).balanceOf(address(this));
-        if (amountUnderlying <= balance) {
-            IERC20(_underlying).safeTransfer(vault(), amountUnderlying);
-            return;
-        }
-        uint256 toRedeem = amountUnderlying - balance;
-        // get some of the underlying
-        _redeemPartial(toRedeem);
-        // transfer the amount requested (or the amount we have) back to vault()
-        IERC20(_underlying).safeTransfer(vault(), amountUnderlying);
-        balance = IERC20(_underlying).balanceOf(address(this));
-        if (balance > 0) {
-            _investAllUnderlying();
-        }
-    }
-
-    /**
-     * Redeems maximum that can be redeemed from Venus.
-     * Redeem the minimum of the underlying we own, and the underlying that the vToken can
-     * immediately retrieve. Ensures that `redeemMaximum` doesn't fail silently.
-     *
-     * DOES NOT ensure that the strategy vUnderlying balance becomes 0.
-     */
-    function _withdrawMaximum() internal {
-        address _mToken = getMToken();
-        // amount of liquidity in Radiant
-        uint256 available = MTokenInterface(_mToken).getCash();
-        // amount we supplied
-        uint256 supplied = MTokenInterface(_mToken).balanceOfUnderlying(address(this));
-        // amount we borrowed
-        uint256 borrowed = MTokenInterface(_mToken).borrowBalanceCurrent(address(this));
-        uint256 balance = supplied - borrowed;
-
-        _redeemWithFlashloan(Math.min(available, balance), 0);
-        //_redeemWithFlashloan(amountUnderlying, getLoopMode() ? getBorrowTargetFactorNumerator() : 0);
-        supplied = MTokenInterface(_mToken).balanceOfUnderlying(address(this));
-        if (supplied > 0) MorphoBlueSnippets.withdrawAmount(getMarketParams(), supplied);
-    }
-}
-
-abstract contract DepositActions is BaseUpgradeableStrategyStorage, RedeemActions {
+abstract contract DepositActions is RedeemActions {
     using MarketParamsLib for MarketParams;
 
     function _depositWithFlashloan() internal {
@@ -253,5 +192,79 @@ abstract contract DepositActions is BaseUpgradeableStrategyStorage, RedeemAction
             borrowed = MorphoBlueSnippets.borrowAssetsUser(marketParams, address(this));
             balance = supplied - borrowed;
         }
+    }
+
+    /**
+     * The strategy invests by supplying the underlying as a collateral.
+     */
+    function _investAllUnderlying() internal onlyNotPausedInvesting {
+        address _underlying = underlying();
+        uint256 underlyingBalance = IERC20(_underlying).balanceOf(address(this));
+        if (underlyingBalance > 0) _supplyCollateralWrap(underlyingBalance);
+        if (!getLoopMode()) return;
+        _depositWithFlashloan();
+    }
+}
+
+abstract contract WithdrawActions is DepositActions {
+    using SafeERC20 for IERC20;
+    using MarketParamsLib for MarketParams;
+
+    /**
+     * Redeems maximum that can be redeemed from Venus.
+     * Redeem the minimum of the underlying we own, and the underlying that the vToken can
+     * immediately retrieve. Ensures that `redeemMaximum` doesn't fail silently.
+     *
+     * DOES NOT ensure that the strategy vUnderlying balance becomes 0.
+     */
+    function _withdrawMaximum() internal {
+        MarketParams memory marketParams = getMarketParams();
+        // TODO: Confirm if we can remove this, I think yes, cause all collateral should be removable it will remain untouch
+        // uint256 available = MTokenInterface(_mToken).getCash();
+        uint256 supplied = MorphoBlueSnippets.collateralAssetsUser(marketParams.id(), address(this));
+        uint256 borrowed = MorphoBlueSnippets.borrowAssetsUser(marketParams, address(this));
+        uint256 balance = supplied - borrowed;
+
+        _redeemWithFlashloan(balance, 0);
+        supplied = MorphoBlueSnippets.collateralAssetsUser(marketParams.id(), address(this));
+        if (supplied > 0) MorphoBlueSnippets.withdrawAmount(getMarketParams(), supplied);
+    }
+
+    /**
+     * Exits Moonwell and transfers everything to the vault.
+     */
+    function withdrawAllToVault() public restricted {
+        // TODO: finish the handle fee part
+        address _underlying = underlying();
+        // _handleFee();
+        IRewardPrePay(getMorphoPrePay()).claim();
+        _liquidateRewards(sell(), rewardToken(), universalLiquidator(), _underlying);
+        _withdrawMaximum();
+        if (IERC20(_underlying).balanceOf(address(this)) > 0) {
+            IERC20(_underlying).safeTransfer(vault(), IERC20(_underlying).balanceOf(address(this)));
+        }
+        // _updateStoredBalance();
+    }
+
+    function emergencyExit() external onlyGovernance {
+        // _accrueFee();
+        _withdrawMaximum();
+        // _updateStoredSupplied();
+    }
+
+    function withdrawToVault(uint256 amountUnderlying) public restricted {
+        address _underlying = underlying();
+        uint256 balance = IERC20(_underlying).balanceOf(address(this));
+        if (amountUnderlying <= balance) {
+            IERC20(_underlying).safeTransfer(vault(), amountUnderlying);
+            return;
+        }
+        uint256 toRedeem = amountUnderlying - balance;
+        // get some of the underlying
+        _redeemPartial(toRedeem);
+        // transfer the amount requested (or the amount we have) back to vault()
+        IERC20(_underlying).safeTransfer(vault(), amountUnderlying);
+        balance = IERC20(_underlying).balanceOf(address(this));
+        if (balance > 0) _investAllUnderlying();
     }
 }
