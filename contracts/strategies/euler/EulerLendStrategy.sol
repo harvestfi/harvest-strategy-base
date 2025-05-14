@@ -120,7 +120,7 @@ contract EulerLendStrategy is BaseUpgradeableStrategy {
   function _handleFee() internal {
     _accrueFee();
     uint256 fee = pendingFee();
-    if (fee > 1e3) {
+    if (fee > 1e5) {
       _redeem(fee);
       address _underlying = underlying();
       fee = Math.min(fee, IERC20(_underlying).balanceOf(address(this)));
