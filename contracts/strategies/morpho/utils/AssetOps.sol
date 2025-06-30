@@ -203,6 +203,11 @@ abstract contract DepositActions is RedeemActions {
         if (underlyingBalance > 0) _supplyCollateralWrap(underlyingBalance);
         if (!getLoopMode()) return;
         _depositWithFlashloan();
+
+        MarketParams memory marketParams = getMarketParams();
+        // Check Health Factor
+        uint256 currentHealthFactor = MorphoBlueSnippets.userHealthFactor(marketParams, marketParams.id(), address(this));
+        if (currentHealthFactor < getMinHealthFactor()) revert ErrorsLib.HEALTH_FACTOR_TOO_LOW();
     }
 }
 
