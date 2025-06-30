@@ -43,6 +43,10 @@ abstract contract StateAccessor is BaseUpgradeableStrategyStorage {
         return getAddress(MLSConstantsLib.MORPHO_PRE_PAY_SLOT);
     }
 
+    function getMinHealthFactor() public view returns (uint256) {
+        return getUint256(MLSConstantsLib.MIN_HEALTH_FACTOR_SLOT);
+    }
+
     /* MOONWELL */
 
     function getMToken() public view returns (address) {
