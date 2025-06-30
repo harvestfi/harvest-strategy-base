@@ -37,6 +37,9 @@ library MLSConstantsLib {
     /// @dev The slot of the morpho pre pay.
     bytes32 internal constant MORPHO_PRE_PAY_SLOT = 0x15ef0a518c284159ce00448aabf99b63238d88ae2c512063daf55e149525d49d;
 
+    /// @dev The slot of the min health factor.
+    bytes32 internal constant MIN_HEALTH_FACTOR_SLOT = 0x1186828477aeae8ddde00c1a3470f8431aee7172b7a7760e4f70cc6881460b38;
+
     /* MOONWELL */
 
     /// @dev The slot of the mToken.

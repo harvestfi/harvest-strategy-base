@@ -25,6 +25,12 @@ library ErrorsLib {
     /// @notice Error message for when the morpho pre pay slot is not correct.
     error MORPHO_PRE_PAY_SLOT_NOT_CORRECT();
 
+    /// @notice Error message for when the min health factor slot is not correct.
+    error MIN_HEALTH_FACTOR_SLOT_NOT_CORRECT();
+
+    /// @notice Error message for when the health factor is too low.
+    error HEALTH_FACTOR_TOO_LOW();
+
     /* FLASH LOAN */
 
     /// @notice Error message for when the flash loan caller is invalid.
