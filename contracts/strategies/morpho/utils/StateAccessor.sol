@@ -47,6 +47,14 @@ abstract contract StateAccessor is BaseUpgradeableStrategyStorage {
         return getUint256(MLSConstantsLib.MIN_HEALTH_FACTOR_SLOT);
     }
 
+    function getPendingFee() public view returns (uint256) {
+        return getUint256(MLSConstantsLib.PENDING_FEE_SLOT);
+    }
+
+    function getFeeNumerator() public view returns (uint256) {
+        return strategistFeeNumerator() + platformFeeNumerator() + profitSharingNumerator();
+    }
+
     /* MOONWELL */
 
     function getMToken() public view returns (address) {

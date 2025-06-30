@@ -38,7 +38,11 @@ library MLSConstantsLib {
     bytes32 internal constant MORPHO_PRE_PAY_SLOT = 0x15ef0a518c284159ce00448aabf99b63238d88ae2c512063daf55e149525d49d;
 
     /// @dev The slot of the min health factor.
-    bytes32 internal constant MIN_HEALTH_FACTOR_SLOT = 0x1186828477aeae8ddde00c1a3470f8431aee7172b7a7760e4f70cc6881460b38;
+    bytes32 internal constant MIN_HEALTH_FACTOR_SLOT =
+        0x1186828477aeae8ddde00c1a3470f8431aee7172b7a7760e4f70cc6881460b38;
+
+    /// @dev The slot of the pending fee.
+    bytes32 internal constant PENDING_FEE_SLOT = 0x0af7af9f5ccfa82c3497f40c7c382677637aee27293a6243a22216b51481bd97;
 
     /* MOONWELL */
 

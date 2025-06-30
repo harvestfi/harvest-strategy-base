@@ -31,6 +31,9 @@ library ErrorsLib {
     /// @notice Error message for when the health factor is too low.
     error HEALTH_FACTOR_TOO_LOW();
 
+    /// @notice Error message for when the pending fee slot is not correct.
+    error PENDING_FEE_SLOT_NOT_CORRECT();
+
     /* FLASH LOAN */
 
     /// @notice Error message for when the flash loan caller is invalid.

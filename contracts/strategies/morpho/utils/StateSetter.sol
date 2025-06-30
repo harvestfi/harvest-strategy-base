@@ -28,6 +28,14 @@ abstract contract StateSetter is ControllableInit, Checks {
         setAddress(MLSConstantsLib.MORPHO_PRE_PAY_SLOT, _target);
     }
 
+    function _setMinHealthFactor(uint256 _target) internal {
+        setUint256(MLSConstantsLib.MIN_HEALTH_FACTOR_SLOT, _target);
+    }
+
+    function _setPendingFee(uint256 _target) internal {
+        setUint256(MLSConstantsLib.PENDING_FEE_SLOT, _target);
+    }
+
     /* MOONWELL */
 
     function _setMToken(address _target) internal {
