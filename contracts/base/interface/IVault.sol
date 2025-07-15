@@ -48,4 +48,6 @@ interface IVault {
     function availableToInvestOut() external view returns (uint256);
 
     function doHardWork() external;
+
+    function decimals() external view returns (uint8);
 }
