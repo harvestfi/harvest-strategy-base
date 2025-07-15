@@ -13,7 +13,7 @@ const IERC20 = artifacts.require("IERC20");
 //const Strategy = artifacts.require("");
 const Strategy = artifacts.require("MoonwellFoldStrategyV2Mainnet_USDC");
 
-// Developed and tested at blockNumber 21793300
+// Developed and tested at blockNumber 29397550
 
 // Vanilla Mocha test. Increased compatibility with tools that integrate Mocha.
 describe("Base Mainnet Moonwell Fold USDC", function() {
@@ -64,7 +64,8 @@ describe("Base Mainnet Moonwell Fold USDC", function() {
 
     await setupExternalContracts();
     [controller, vault, strategy] = await setupCoreProtocol({
-      "existingVaultAddress": null,
+      "existingVaultAddress": "0x90613e167D42CA420942082157B42AF6fc6a8087",
+      "announceStrategy": true,
       "strategyArtifact": Strategy,
       "strategyArtifactIsUpgradable": true,
       "underlying": underlying,
