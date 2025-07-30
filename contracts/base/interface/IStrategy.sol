@@ -15,6 +15,7 @@ interface IStrategy {
     function vault() external view returns (address);
 
     function withdrawAllToVault() external;
+    function withdrawAllToVault(bool compound) external;
 
     function withdrawToVault(uint256 _amount) external;
 
