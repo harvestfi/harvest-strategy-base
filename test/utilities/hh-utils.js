@@ -1,10 +1,14 @@
+const BigNumber = require("bignumber.js");
 const makeVault = require("./make-vault.js");
 const addresses = require("../test-config.js");
 const IController = artifacts.require("IController");
 const Vault = artifacts.require("VaultV2");
+const CLVault = artifacts.require("CLVault");
+const VaultProxy = artifacts.require("VaultProxy");
 const IUpgradeableStrategy = artifacts.require("IUpgradeableStrategy");
 const ILiquidatorRegistry = artifacts.require("IUniversalLiquidatorRegistry");
 const IDex = artifacts.require("IDex");
+const IERC721 = artifacts.require("IERC721");
 
 const Utils = require("./Utils.js");
 
@@ -27,9 +31,25 @@ async function setupCoreProtocol(config) {
   if(config.existingVaultAddress != null){
     vault = await Vault.at(config.existingVaultAddress);
     console.log("Fetching Vault at: ", vault.address);
+  } else if (config.CLVault) {
+    const impl = await CLVault.new();
+    const implAddress = impl.address;
+    const vaultAsProxy = await VaultProxy.new(implAddress);
+    vault = await CLVault.at(vaultAsProxy.address);
+    const nftToken = await IERC721.at(config.CLSetup.posManager);
+    await nftToken.approve(vault.address, config.CLSetup.posId, { from: config.governance })
+    await vault.initializeVault(
+      addresses.Storage,
+      config.CLSetup.posId,
+      config.CLSetup.posManager,
+      config.CLSetup.targetWidth,
+      { from: config.governance }
+    );
+    console.log("New Vault Deployed: ", vault.address);
+    console.log(new BigNumber(await vault.balanceOf(config.governance)).toFixed());
   } else {
-    const impl = await Vault.new();
-    vault = await makeVault(impl.address, addresses.Storage, config.underlying.address, 100, 100, {
+    const implAddress = config.vaultImplementationOverride || addresses.VaultImplementation;
+    vault = await makeVault(implAddress, addresses.Storage, config.underlying.address, 100, 100, {
       from: config.governance,
     });
     console.log("New Vault Deployed: ", vault.address);
