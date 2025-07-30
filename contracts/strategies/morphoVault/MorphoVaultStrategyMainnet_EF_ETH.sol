@@ -26,4 +26,12 @@ contract MorphoVaultStrategyMainnet_EF_ETH is MorphoVaultStrategy {
     );
     rewardTokens = [morpho];
   }
+
+  function finalizeUpgrade() external override onlyGovernance {
+    address extra = address(0x2dAD3a13ef0C6366220f989157009e501e7938F8);
+    address morpho = address(0xBAa5CC21fd487B8Fcc2F632f3F4E8D37262a0842);
+    rewardTokens = [morpho, extra];
+    distributionTime[extra] = 43200;
+    _finalizeUpgrade();
+  }
 }

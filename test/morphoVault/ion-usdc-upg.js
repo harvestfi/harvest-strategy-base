@@ -11,21 +11,24 @@ const BigNumber = require("bignumber.js");
 const IERC20 = artifacts.require("IERC20");
 
 //const Strategy = artifacts.require("");
-const Strategy = artifacts.require("MoonwellFoldStrategyV2Mainnet_cbXRP");
+const Strategy = artifacts.require("MorphoVaultStrategyMainnet_ION_USDC");
+const IRewardPrePay = artifacts.require("IRewardPrePay");
 
-// Developed and tested at blockNumber 32940425
+// Developed and tested at blockNumber 33281400
 
 // Vanilla Mocha test. Increased compatibility with tools that integrate Mocha.
-describe("Base Mainnet Moonwell Fold cbXRP", function() {
+describe("Base Mainnet Morpho Vault Ionic USDC", function() {
   let accounts;
 
   // external contracts
   let underlying;
 
   // external setup
-  let underlyingWhale = "0xcdE37ED88997BEA80f5395309192F45312Af0581";
-  let well = "0xA88594D404727625A9437C3f886C7643872296AE";
-  let weth = "0x4200000000000000000000000000000000000006";
+  let underlyingWhale = "0x796Ce6Db8e97981707B99eb2259ed132515f0B69";
+  let ionWhale = "0x2273B2Fb1664f100C07CDAa25Afd1CD0DA3C7437";
+  let ion = "0x3eE5e23eEE121094f1cFc0Ccc79d6C809Ebd22e5";
+  let rewardPrePay;
+  let ionToken;
 
   // parties in the protocol
   let governance;
@@ -40,13 +43,16 @@ describe("Base Mainnet Moonwell Fold cbXRP", function() {
   let strategy;
 
   async function setupExternalContracts() {
-    underlying = await IERC20.at("0xcb585250f852C6c6bf90434AB21A00f02833a4af");
+    underlying = await IERC20.at("0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913");
     console.log("Fetching Underlying at: ", underlying.address);
+    rewardPrePay = await IRewardPrePay.at("0x85DEf13cAfe6AFB1D810203324b7169040968843");
+    ionToken = await IERC20.at(ion);
   }
 
   async function setupBalance(){
     let etherGiver = accounts[9];
     await web3.eth.sendTransaction({ from: etherGiver, to: underlyingWhale, value: 10e18});
+    await web3.eth.sendTransaction({ from: etherGiver, to: ionWhale, value: 10e18});
 
     farmerBalance = await underlying.balanceOf(underlyingWhale);
     await underlying.transfer(farmer1, farmerBalance, { from: underlyingWhale });
@@ -59,22 +65,19 @@ describe("Base Mainnet Moonwell Fold cbXRP", function() {
     farmer1 = accounts[1];
 
     // impersonate accounts
-    await impersonates([governance, underlyingWhale]);
+    await impersonates([governance, underlyingWhale, ionWhale]);
 
     let etherGiver = accounts[9];
     await web3.eth.sendTransaction({ from: etherGiver, to: governance, value: 10e18});
 
     await setupExternalContracts();
     [controller, vault, strategy] = await setupCoreProtocol({
-      "existingVaultAddress": "0xC9AF79bC3D5660eA18dee22415BAfDAB08fb461B",
+      "existingVaultAddress": "0x5B2102BFd84F0c6803A8B0178E3751d0254AECCB",
+      "upgradeStrategy": true,
       "strategyArtifact": Strategy,
       "strategyArtifactIsUpgradable": true,
-      "announceStrategy": true,
       "underlying": underlying,
       "governance": governance,
-      "liquidation": [
-        {"aeroCL": [well, weth, underlying.address]},
-      ],
     });
 
     // whale send underlying to farmers
@@ -93,6 +96,12 @@ describe("Base Mainnet Moonwell Fold cbXRP", function() {
 
       for (let i = 0; i < hours; i++) {
         console.log("loop ", i);
+
+        if (i % 3 == 0) {
+          await ionToken.transfer(strategy.address, new BigNumber(1e22), {from: ionWhale});
+        }
+        
+        await rewardPrePay.updateReward(strategy.address, new BigNumber(i+1).times(1e17).toFixed(), {from: governance});
 
         oldSharePrice = new BigNumber(await vault.getPricePerFullShare());
         await controller.doHardWork(vault.address, { from: governance });

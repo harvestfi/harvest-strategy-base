@@ -27,4 +27,14 @@ contract MorphoVaultStrategyMainnet_ION_ETH is MorphoVaultStrategy {
     );
     rewardTokens = [morpho, ion];
   }
+
+  function finalizeUpgrade() external override onlyGovernance {
+    address ion = address(0x3eE5e23eEE121094f1cFc0Ccc79d6C809Ebd22e5);
+    address extra = address(0x2dAD3a13ef0C6366220f989157009e501e7938F8);
+    address morpho = address(0xBAa5CC21fd487B8Fcc2F632f3F4E8D37262a0842);
+    rewardTokens = [morpho, ion, extra];
+    distributionTime[ion] = 43200;
+    distributionTime[extra] = 43200;
+    _finalizeUpgrade();
+  }
 }

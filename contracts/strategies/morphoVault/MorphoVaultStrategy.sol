@@ -28,6 +28,7 @@ contract MorphoVaultStrategy is BaseUpgradeableStrategy {
   mapping(address => uint256) public rewardBalanceLast;
   mapping(address => uint256) public lastRewardTime;
   mapping(address => uint256) public rewardPerSec;
+  mapping(address => uint256) public distributionTime;
 
   modifier onlyRewardPrePayOrGovernance() {
     require(msg.sender == morphoPrePay() || (msg.sender == governance()),
@@ -203,8 +204,8 @@ contract MorphoVaultStrategy is BaseUpgradeableStrategy {
 
   function _updateDist(uint256 balance, address token) internal {
     rewardBalanceLast[token] = balance;
-    lastRewardTime[token] = block.timestamp.sub(86400);
-    rewardPerSec[token] = balance.div(691200);
+    lastRewardTime[token] = block.timestamp.sub(distributionTime[token].div(10));
+    rewardPerSec[token] = balance.div(distributionTime[token]);
   }
 
   function _getAmt(address token) internal returns (uint256) {
@@ -301,8 +302,13 @@ contract MorphoVaultStrategy is BaseUpgradeableStrategy {
     return getAddress(_PRE_PAY_SLOT);
   }
 
-  function finalizeUpgrade() external onlyGovernance {
+  function finalizeUpgrade() external virtual onlyGovernance {
     _finalizeUpgrade();
+  }
+
+  function setDistributionTime(address token, uint256 time) external onlyGovernance {
+    require(time > 10, "Distribution time must be greater than 10");
+    distributionTime[token] = time;
   }
 
   receive() external payable {}
