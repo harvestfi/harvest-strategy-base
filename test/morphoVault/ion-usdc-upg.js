@@ -12,7 +12,6 @@ const IERC20 = artifacts.require("IERC20");
 
 //const Strategy = artifacts.require("");
 const Strategy = artifacts.require("MorphoVaultStrategyMainnet_ION_USDC");
-const IRewardPrePay = artifacts.require("IRewardPrePay");
 
 // Developed and tested at blockNumber 33281400
 
@@ -27,8 +26,10 @@ describe("Base Mainnet Morpho Vault Ionic USDC", function() {
   let underlyingWhale = "0x796Ce6Db8e97981707B99eb2259ed132515f0B69";
   let ionWhale = "0x2273B2Fb1664f100C07CDAa25Afd1CD0DA3C7437";
   let ion = "0x3eE5e23eEE121094f1cFc0Ccc79d6C809Ebd22e5";
-  let rewardPrePay;
+  let morphoWhale = "0xbC5a4A09450B4106bE9a4DF3d85dA3F4617e819F";
+  let morpho = "0xBAa5CC21fd487B8Fcc2F632f3F4E8D37262a0842";
   let ionToken;
+  let morphoToken;
 
   // parties in the protocol
   let governance;
@@ -45,14 +46,15 @@ describe("Base Mainnet Morpho Vault Ionic USDC", function() {
   async function setupExternalContracts() {
     underlying = await IERC20.at("0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913");
     console.log("Fetching Underlying at: ", underlying.address);
-    rewardPrePay = await IRewardPrePay.at("0x85DEf13cAfe6AFB1D810203324b7169040968843");
     ionToken = await IERC20.at(ion);
+    morphoToken = await IERC20.at(morpho);
   }
 
   async function setupBalance(){
     let etherGiver = accounts[9];
     await web3.eth.sendTransaction({ from: etherGiver, to: underlyingWhale, value: 10e18});
     await web3.eth.sendTransaction({ from: etherGiver, to: ionWhale, value: 10e18});
+    await web3.eth.sendTransaction({ from: etherGiver, to: morphoWhale, value: 10e18});
 
     farmerBalance = await underlying.balanceOf(underlyingWhale);
     await underlying.transfer(farmer1, farmerBalance, { from: underlyingWhale });
@@ -65,7 +67,7 @@ describe("Base Mainnet Morpho Vault Ionic USDC", function() {
     farmer1 = accounts[1];
 
     // impersonate accounts
-    await impersonates([governance, underlyingWhale, ionWhale]);
+    await impersonates([governance, underlyingWhale, ionWhale, morphoWhale]);
 
     let etherGiver = accounts[9];
     await web3.eth.sendTransaction({ from: etherGiver, to: governance, value: 10e18});
@@ -82,6 +84,8 @@ describe("Base Mainnet Morpho Vault Ionic USDC", function() {
 
     // whale send underlying to farmers
     await setupBalance();
+
+    await strategy.toggleMerklOperator("0x3Ef3D8bA38EBe18DB133cEc108f4D14CE00Dd9Ae", "0x6a74649aCFD7822ae8Fb78463a9f2192752E5Aa2", {from: governance});
   });
 
   describe("Happy path", function() {
@@ -89,7 +93,7 @@ describe("Base Mainnet Morpho Vault Ionic USDC", function() {
       let farmerOldBalance = new BigNumber(await underlying.balanceOf(farmer1));
       await depositVault(farmer1, underlying, vault, farmerBalance);
 
-      let hours = 10;
+      let hours = 25;
       let blocksPerHour = 3600;
       let oldSharePrice;
       let newSharePrice;
@@ -99,10 +103,9 @@ describe("Base Mainnet Morpho Vault Ionic USDC", function() {
 
         if (i % 3 == 0) {
           await ionToken.transfer(strategy.address, new BigNumber(1e22), {from: ionWhale});
+          await morphoToken.transfer(strategy.address, new BigNumber(1e18), {from: morphoWhale});
         }
         
-        await rewardPrePay.updateReward(strategy.address, new BigNumber(i+1).times(1e17).toFixed(), {from: governance});
-
         oldSharePrice = new BigNumber(await vault.getPricePerFullShare());
         await controller.doHardWork(vault.address, { from: governance });
         newSharePrice = new BigNumber(await vault.getPricePerFullShare());

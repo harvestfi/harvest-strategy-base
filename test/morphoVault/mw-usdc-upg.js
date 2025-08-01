@@ -11,24 +11,24 @@ const BigNumber = require("bignumber.js");
 const IERC20 = artifacts.require("IERC20");
 
 //const Strategy = artifacts.require("");
-const Strategy = artifacts.require("MorphoVaultStrategyMainnet_ION_ETH");
+const Strategy = artifacts.require("MorphoVaultStrategyMainnet_MW_USDC");
 
 // Developed and tested at blockNumber 33281400
 
 // Vanilla Mocha test. Increased compatibility with tools that integrate Mocha.
-describe("Base Mainnet Morpho Vault Ionic ETH", function() {
+describe("Base Mainnet Morpho Vault Moonwell USDC", function() {
   let accounts;
 
   // external contracts
   let underlying;
 
   // external setup
-  let underlyingWhale = "0x06A84239688734aCd58b9EA131b112819D2550be";
-  let ionWhale = "0x2273B2Fb1664f100C07CDAa25Afd1CD0DA3C7437";
-  let ion = "0x3eE5e23eEE121094f1cFc0Ccc79d6C809Ebd22e5";
+  let underlyingWhale = "0x796Ce6Db8e97981707B99eb2259ed132515f0B69";
+  let wellWhale = "0x4942E15F4B3B684EEbB7eE28C922fc634Cc751B1";
+  let well = "0xA88594D404727625A9437C3f886C7643872296AE";
   let morphoWhale = "0xbC5a4A09450B4106bE9a4DF3d85dA3F4617e819F";
   let morpho = "0xBAa5CC21fd487B8Fcc2F632f3F4E8D37262a0842";
-  let ionToken;
+  let wellToken;
   let morphoToken;
 
   // parties in the protocol
@@ -44,16 +44,16 @@ describe("Base Mainnet Morpho Vault Ionic ETH", function() {
   let strategy;
 
   async function setupExternalContracts() {
-    underlying = await IERC20.at("0x4200000000000000000000000000000000000006");
+    underlying = await IERC20.at("0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913");
     console.log("Fetching Underlying at: ", underlying.address);
-    ionToken = await IERC20.at(ion);
+    wellToken = await IERC20.at(well);
     morphoToken = await IERC20.at(morpho);
   }
 
   async function setupBalance(){
     let etherGiver = accounts[9];
     await web3.eth.sendTransaction({ from: etherGiver, to: underlyingWhale, value: 10e18});
-    await web3.eth.sendTransaction({ from: etherGiver, to: ionWhale, value: 10e18});
+    await web3.eth.sendTransaction({ from: etherGiver, to: wellWhale, value: 10e18});
     await web3.eth.sendTransaction({ from: etherGiver, to: morphoWhale, value: 10e18});
 
     farmerBalance = await underlying.balanceOf(underlyingWhale);
@@ -67,14 +67,14 @@ describe("Base Mainnet Morpho Vault Ionic ETH", function() {
     farmer1 = accounts[1];
 
     // impersonate accounts
-    await impersonates([governance, underlyingWhale, ionWhale, morphoWhale]);
+    await impersonates([governance, underlyingWhale, wellWhale, morphoWhale]);
 
     let etherGiver = accounts[9];
     await web3.eth.sendTransaction({ from: etherGiver, to: governance, value: 10e18});
 
     await setupExternalContracts();
     [controller, vault, strategy] = await setupCoreProtocol({
-      "existingVaultAddress": "0x696c4e58C23Dc0d5A45a73f6943353B3c32d28e9",
+      "existingVaultAddress": "0x9C012E4fe655b90839e1b65a461B72813c9ac2A4",
       "upgradeStrategy": true,
       "strategyArtifact": Strategy,
       "strategyArtifactIsUpgradable": true,
@@ -105,7 +105,7 @@ describe("Base Mainnet Morpho Vault Ionic ETH", function() {
         console.log("loop ", i);
 
         if (i % 3 == 0) {
-          await ionToken.transfer(strategy.address, new BigNumber(1e22), {from: ionWhale});
+          await wellToken.transfer(strategy.address, new BigNumber(1e19), {from: wellWhale});
           await morphoToken.transfer(strategy.address, new BigNumber(1e18), {from: morphoWhale});
         }
         

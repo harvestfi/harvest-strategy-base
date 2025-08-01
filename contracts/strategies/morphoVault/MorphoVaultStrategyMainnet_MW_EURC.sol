@@ -27,4 +27,13 @@ contract MorphoVaultStrategyMainnet_MW_EURC is MorphoVaultStrategy {
     );
     rewardTokens = [morpho, well];
   }
+
+  function finalizeUpgrade() external override onlyGovernance {
+    address morpho = address(0xBAa5CC21fd487B8Fcc2F632f3F4E8D37262a0842);
+    address well = address(0xA88594D404727625A9437C3f886C7643872296AE);
+    rewardTokens = [morpho, well];
+    distributionTime[morpho] = 43200;
+    distributionTime[well] = 43200 * 14;
+    _finalizeUpgrade();
+  }
 }

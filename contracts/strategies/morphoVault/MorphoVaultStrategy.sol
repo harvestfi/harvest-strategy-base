@@ -124,7 +124,6 @@ contract MorphoVaultStrategy is BaseUpgradeableStrategy {
   function withdrawAllToVault() public restricted {
     address _underlying = underlying();
     _handleFee();
-    IRewardPrePay(morphoPrePay()).claim();
     _liquidateRewards();
     _redeemMaximum();
     if (IERC20(_underlying).balanceOf(address(this)) > 0) {
@@ -174,12 +173,10 @@ contract MorphoVaultStrategy is BaseUpgradeableStrategy {
     for (uint256 i; i < rewardTokens.length; i++) {
       address token = rewardTokens[i];
       uint256 balance = IERC20(token).balanceOf(address(this));
-      if (!(token == IRewardPrePay(morphoPrePay()).MORPHO())) {
-        if (balance > rewardBalanceLast[token]) {
-          _updateDist(balance, token);
-        }
-        balance = _getAmt(token);
+      if (balance > rewardBalanceLast[token] || rewardBalanceLast[token] == 0) {
+        _updateDist(balance, token);
       }
+      balance = _getAmt(token);
       if (balance > 0 && token != _rewardToken){
         IERC20(token).safeApprove(_universalLiquidator, 0);
         IERC20(token).safeApprove(_universalLiquidator, balance);
@@ -190,7 +187,7 @@ contract MorphoVaultStrategy is BaseUpgradeableStrategy {
     _notifyProfitInRewardToken(_rewardToken, rewardBalance);
     uint256 remainingRewardBalance = IERC20(_rewardToken).balanceOf(address(this));
 
-    if (remainingRewardBalance == 0) {
+    if (remainingRewardBalance <= 1e12) {
       return;
     }
   
@@ -204,12 +201,18 @@ contract MorphoVaultStrategy is BaseUpgradeableStrategy {
 
   function _updateDist(uint256 balance, address token) internal {
     rewardBalanceLast[token] = balance;
-    lastRewardTime[token] = block.timestamp.sub(distributionTime[token].div(10));
-    rewardPerSec[token] = balance.div(distributionTime[token]);
+    if (distributionTime[token] > 0) {
+      lastRewardTime[token] = lastRewardTime[token] < block.timestamp.sub(distributionTime[token]) ? 
+        block.timestamp.sub(distributionTime[token].div(20)) : lastRewardTime[token];
+      rewardPerSec[token] = balance.div(distributionTime[token]);
+    }
   }
 
   function _getAmt(address token) internal returns (uint256) {
     uint256 balance = IERC20(token).balanceOf(address(this));
+    if (distributionTime[token] == 0) {
+      return balance;
+    }
     uint256 earned = Math.min(block.timestamp.sub(lastRewardTime[token]).mul(rewardPerSec[token]), balance);
     rewardBalanceLast[token] = balance.sub(earned);
     lastRewardTime[token] = block.timestamp;
@@ -234,7 +237,7 @@ contract MorphoVaultStrategy is BaseUpgradeableStrategy {
   */
   function doHardWork() public restricted {
     _handleFee();
-    IRewardPrePay(morphoPrePay()).claim();
+    _claimGeneralIncentives();
     _liquidateRewards();
     _supply(IERC20(underlying()).balanceOf(address(this)));
     _updateStoredSupplied();

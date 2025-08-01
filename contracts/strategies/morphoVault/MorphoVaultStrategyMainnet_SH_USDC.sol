@@ -26,4 +26,11 @@ contract MorphoVaultStrategyMainnet_SH_USDC is MorphoVaultStrategy {
     );
     rewardTokens = [morpho];
   }
+
+  function finalizeUpgrade() external override onlyGovernance {
+    address morpho = address(0xBAa5CC21fd487B8Fcc2F632f3F4E8D37262a0842);
+    rewardTokens = [morpho];
+    distributionTime[morpho] = 43200;
+    _finalizeUpgrade();
+  }
 }

@@ -11,24 +11,21 @@ const BigNumber = require("bignumber.js");
 const IERC20 = artifacts.require("IERC20");
 
 //const Strategy = artifacts.require("");
-const Strategy = artifacts.require("MorphoVaultStrategyMainnet_ION_ETH");
+const Strategy = artifacts.require("MorphoVaultStrategyMainnet_GF_USDC");
 
 // Developed and tested at blockNumber 33281400
 
 // Vanilla Mocha test. Increased compatibility with tools that integrate Mocha.
-describe("Base Mainnet Morpho Vault Ionic ETH", function() {
+describe("Base Mainnet Morpho Vault Gauntlet Frontier USDC", function() {
   let accounts;
 
   // external contracts
   let underlying;
 
   // external setup
-  let underlyingWhale = "0x06A84239688734aCd58b9EA131b112819D2550be";
-  let ionWhale = "0x2273B2Fb1664f100C07CDAa25Afd1CD0DA3C7437";
-  let ion = "0x3eE5e23eEE121094f1cFc0Ccc79d6C809Ebd22e5";
+  let underlyingWhale = "0x796Ce6Db8e97981707B99eb2259ed132515f0B69";
   let morphoWhale = "0xbC5a4A09450B4106bE9a4DF3d85dA3F4617e819F";
   let morpho = "0xBAa5CC21fd487B8Fcc2F632f3F4E8D37262a0842";
-  let ionToken;
   let morphoToken;
 
   // parties in the protocol
@@ -44,16 +41,14 @@ describe("Base Mainnet Morpho Vault Ionic ETH", function() {
   let strategy;
 
   async function setupExternalContracts() {
-    underlying = await IERC20.at("0x4200000000000000000000000000000000000006");
+    underlying = await IERC20.at("0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913");
     console.log("Fetching Underlying at: ", underlying.address);
-    ionToken = await IERC20.at(ion);
     morphoToken = await IERC20.at(morpho);
   }
 
   async function setupBalance(){
     let etherGiver = accounts[9];
     await web3.eth.sendTransaction({ from: etherGiver, to: underlyingWhale, value: 10e18});
-    await web3.eth.sendTransaction({ from: etherGiver, to: ionWhale, value: 10e18});
     await web3.eth.sendTransaction({ from: etherGiver, to: morphoWhale, value: 10e18});
 
     farmerBalance = await underlying.balanceOf(underlyingWhale);
@@ -67,28 +62,26 @@ describe("Base Mainnet Morpho Vault Ionic ETH", function() {
     farmer1 = accounts[1];
 
     // impersonate accounts
-    await impersonates([governance, underlyingWhale, ionWhale, morphoWhale]);
+    await impersonates([governance, underlyingWhale, morphoWhale]);
 
     let etherGiver = accounts[9];
     await web3.eth.sendTransaction({ from: etherGiver, to: governance, value: 10e18});
 
     await setupExternalContracts();
     [controller, vault, strategy] = await setupCoreProtocol({
-      "existingVaultAddress": "0x696c4e58C23Dc0d5A45a73f6943353B3c32d28e9",
+      "existingVaultAddress": "0xA0200EEeD8D90aa01dE741DAEfab5F86C09D5785",
       "upgradeStrategy": true,
       "strategyArtifact": Strategy,
       "strategyArtifactIsUpgradable": true,
       "underlying": underlying,
       "governance": governance,
-      // "liquidation": [
-      //   {"aerodrome": [ion, weth, usdc]},
-      // ],
     });
 
     // whale send underlying to farmers
     await setupBalance();
 
     await strategy.toggleMerklOperator("0x3Ef3D8bA38EBe18DB133cEc108f4D14CE00Dd9Ae", "0x6a74649aCFD7822ae8Fb78463a9f2192752E5Aa2", {from: governance});
+    await strategy.toggleMerklOperator("0x3Ef3D8bA38EBe18DB133cEc108f4D14CE00Dd9Ae", "0xFeed4C53d827AEBEBED6066788065eA1027C7e70", {from: governance});
   });
 
   describe("Happy path", function() {
@@ -105,7 +98,6 @@ describe("Base Mainnet Morpho Vault Ionic ETH", function() {
         console.log("loop ", i);
 
         if (i % 3 == 0) {
-          await ionToken.transfer(strategy.address, new BigNumber(1e22), {from: ionWhale});
           await morphoToken.transfer(strategy.address, new BigNumber(1e18), {from: morphoWhale});
         }
         

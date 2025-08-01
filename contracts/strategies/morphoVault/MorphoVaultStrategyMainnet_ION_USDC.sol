@@ -35,6 +35,7 @@ contract MorphoVaultStrategyMainnet_ION_USDC is MorphoVaultStrategy {
     rewardTokens = [morpho, ion, extra];
     distributionTime[ion] = 43200;
     distributionTime[extra] = 43200;
+    distributionTime[morpho] = 43200;
     _finalizeUpgrade();
   }
 }

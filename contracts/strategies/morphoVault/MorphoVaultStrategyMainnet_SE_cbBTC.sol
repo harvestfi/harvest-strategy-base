@@ -27,4 +27,13 @@ contract MorphoVaultStrategyMainnet_SE_cbBTC is MorphoVaultStrategy {
     );
     rewardTokens = [morpho, seam];
   }
+
+  function finalizeUpgrade() external override onlyGovernance {
+    address morpho = address(0xBAa5CC21fd487B8Fcc2F632f3F4E8D37262a0842);
+    address seam = address(0x1C7a460413dD4e964f96D8dFC56E7223cE88CD85);
+    rewardTokens = [morpho, seam];
+    distributionTime[morpho] = 43200;
+    distributionTime[seam] = 43200 * 14;
+    _finalizeUpgrade();
+  }
 }
