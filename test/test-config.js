@@ -17,6 +17,7 @@ module.exports = {
   "RewardPrePayMorpho": "0x1E905e572100134aFeEe01E88703cdbb0AdAF62c",
   "Drip": "0x49E7AF6426D48B83B0Fa15ecF32DC622Fb411F34",
   "Timelock": "0x9cCd7CF2aD402e8f807C714647Aeb9e29fdcd791",
+  "IncentivesGeneral": "0x040fA374c23ADc3702bFD56ecCC6609b92c9FDa8",
   "Incentives": {
     "GlobalIncentivesExecutor": "0xC69171Ab8722e511bc41B68bc7463Bd89Eff476b",
     "GlobalIncentivesHelper": "0x84891022D6F0d478C1AA59a336aAAF555b3dA093",

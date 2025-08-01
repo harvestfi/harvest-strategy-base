@@ -9,6 +9,7 @@ const IUpgradeableStrategy = artifacts.require("IUpgradeableStrategy");
 const ILiquidatorRegistry = artifacts.require("IUniversalLiquidatorRegistry");
 const IDex = artifacts.require("IDex");
 const IERC721 = artifacts.require("IERC721");
+const IncentivesGeneral = artifacts.require("IncentivesGeneral");
 
 const Utils = require("./Utils.js");
 
@@ -193,7 +194,17 @@ async function setupCoreProtocol(config) {
   } else {
     await vault.setStrategy(strategy.address, {from: config.governance});
   }
-  return [controller, vault, strategy, rewardPool];
+
+  let incentives = null;
+  if (addresses.IncentivesGeneral != "0x0000000000000000000000000000000000000000") {
+    incentives = await IncentivesGeneral.at(addresses.IncentivesGeneral);
+    console.log("IncentivesGeneral loaded: ", incentives.address);
+  } else {
+    incentives = await IncentivesGeneral.new(addresses.Storage, { from: config.governance });
+    console.log("IncentivesGeneral deployed: ", incentives.address);
+  }
+  await strategy.setIncentives(incentives.address, { from: config.governance });
+  return [controller, vault, strategy, rewardPool, incentives];
 }
 
 async function depositVault(_farmer, _underlying, _vault, _amount) {
