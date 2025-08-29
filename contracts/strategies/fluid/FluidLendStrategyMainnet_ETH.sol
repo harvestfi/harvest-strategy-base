@@ -3,7 +3,7 @@ pragma solidity 0.8.26;
 
 import "./FluidLendStrategy.sol";
 
-contract FluidLendStrategyMainnet_EURC is FluidLendStrategy {
+contract FluidLendStrategyMainnet_ETH is FluidLendStrategy {
 
   constructor() {}
 
