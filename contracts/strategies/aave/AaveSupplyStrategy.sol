@@ -80,15 +80,13 @@ contract AaveSupplyStrategy is BaseUpgradeableStrategy {
   function _handleFee() internal {
     _accrueFee();
     uint256 fee = pendingFee();
-    if (fee > 100) {
-      uint256 balanceIncrease = fee.mul(feeDenominator()).div(totalFeeNumerator());
+    if (fee > 1e2) {
       _redeem(fee);
       address _underlying = underlying();
-      if (IERC20(_underlying).balanceOf(address(this)) < fee) {
-        balanceIncrease = IERC20(_underlying).balanceOf(address(this)).mul(feeDenominator()).div(totalFeeNumerator());
-      }
+      fee = Math.min(fee, IERC20(_underlying).balanceOf(address(this)));
+      uint256 balanceIncrease = fee.mul(feeDenominator()).div(totalFeeNumerator());
       _notifyProfitInRewardToken(_underlying, balanceIncrease);
-      setUint256(_PENDING_FEE_SLOT, 0);
+      setUint256(_PENDING_FEE_SLOT, pendingFee().sub(fee));
     }
   }
   
@@ -134,7 +132,7 @@ contract AaveSupplyStrategy is BaseUpgradeableStrategy {
     // transfer the amount requested (or the amount we have) back to vault()
     IERC20(_underlying).safeTransfer(vault(), amountUnderlying);
     balance = IERC20(_underlying).balanceOf(address(this));
-    if (balance > 0) {
+    if (balance > 1e2) {
       _supply(balance);
     }
     _updateStoredSupplied();
@@ -172,7 +170,7 @@ contract AaveSupplyStrategy is BaseUpgradeableStrategy {
   * Supplies to Moonwel
   */
   function _supply(uint256 amount) internal {
-    if (amount == 0){
+    if (amount < 1e2){
       return;
     }
     address _underlying = underlying();
