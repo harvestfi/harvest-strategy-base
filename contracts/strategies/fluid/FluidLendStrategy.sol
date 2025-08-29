@@ -120,17 +120,14 @@ contract FluidLendStrategy is BaseUpgradeableStrategy {
   function _handleFee() internal {
     _accrueFee();
     uint256 fee = pendingFee();
-    if (fee > 10) {
-      uint256 balanceIncrease = fee.mul(feeDenominator()).div(totalFeeNumerator());
+    if (fee > 1e2) {
       _redeem(fee);
       address _underlying = underlying();
-      if (IERC20(_underlying).balanceOf(address(this)) < fee) {
-        balanceIncrease = IERC20(_underlying).balanceOf(address(this)).mul(feeDenominator()).div(totalFeeNumerator());
-      }
+      fee = Math.min(fee, IERC20(_underlying).balanceOf(address(this)));
+      uint256 balanceIncrease = fee.mul(feeDenominator()).div(totalFeeNumerator());
       _notifyProfitInRewardToken(_underlying, balanceIncrease);
-      setUint256(_PENDING_FEE_SLOT, 0);
+      setUint256(_PENDING_FEE_SLOT, pendingFee().sub(fee));
     }
-    _updateStoredBalance();
   }
 
   /**
@@ -148,7 +145,7 @@ contract FluidLendStrategy is BaseUpgradeableStrategy {
   function _investAllUnderlying() internal onlyNotPausedInvesting {
     address _underlying = underlying();
     uint256 underlyingBalance = IERC20(_underlying).balanceOf(address(this));
-    if (underlyingBalance > 1e1) {
+    if (underlyingBalance > 1e2) {
       _supply(underlyingBalance);
     }
   }
@@ -201,7 +198,7 @@ contract FluidLendStrategy is BaseUpgradeableStrategy {
     _redeem(toRedeem);
     balance = IERC20(_underlying).balanceOf(address(this));
     IERC20(_underlying).safeTransfer(vault(), Math.min(amountUnderlying, balance));
-    if (balance > 1e1) {
+    if (balance > 1e2) {
       _investAllUnderlying();
     }
     _updateStoredBalance();
