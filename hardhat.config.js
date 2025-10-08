@@ -1,4 +1,4 @@
-require("@nomiclabs/hardhat-etherscan");
+require("@nomicfoundation/hardhat-verify");
 require("@nomiclabs/hardhat-truffle5");
 require("@nomiclabs/hardhat-web3");
 require("@nomiclabs/hardhat-ethers");
@@ -22,8 +22,9 @@ module.exports = {
       chainId: 8453,
       forking: {
         url: `https://base-mainnet.g.alchemy.com/v2/${process.env.ALCHEMEY_KEY}`,
-        blockNumber: 26367650, // <-- edit here
+        blockNumber: 36568650, // <-- edit here
       },
+      allowUnlimitedContractSize: true,
     },
     mainnet: {
       url: `https://base-mainnet.g.alchemy.com/v2/${process.env.ALCHEMEY_KEY}`,
@@ -49,19 +50,7 @@ module.exports = {
     timeout: 2000000
   },
   etherscan: {
-    apiKey: {
-      base: process.env.BASESCAN_API_KEY,
-    },
-    customChains: [
-      {
-        network: "base",
-        chainId: 8453,
-        urls: {
-          apiURL: "https://api.basescan.org/api",
-          browserURL: "https://basescan.com"
-        }
-      }
-    ]
+    apiKey: process.env.BASESCAN_API_KEY,
   },
   contractSizer: {
     alphaSort: false,

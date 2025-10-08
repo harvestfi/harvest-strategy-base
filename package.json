@@ -20,7 +20,7 @@
   "homepage": "https://github.com/harvestfi/harvest-strategy-base#readme",
   "devDependencies": {
     "@nomiclabs/hardhat-ethers": "2.2.3",
-    "@nomiclabs/hardhat-etherscan": "3.1.7",
+    "@nomicfoundation/hardhat-verify": "2.1.1",
     "@nomiclabs/hardhat-waffle": "2.0.6",
     "@openzeppelin/test-helpers": "0.5.16",
     "dotenv": "^16.4.5",
