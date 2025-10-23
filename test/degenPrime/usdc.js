@@ -24,7 +24,7 @@ describe("Base Mainnet DegenPrime USDC", function() {
   let underlying;
 
   // external setup
-  let underlyingWhale = "0x6F7a822d2f46F8354f84c8B5046FDaB80c79D3D1";
+  let underlyingWhale = "0x6e510E3479d5D1958B0c5D4568891ADffeCDEe65";
   let roleAdmin = "0xCD053EeA1B82867c491dECe0A8833941849771D0";
   let roleAddr = "0x59753f99E275a3A291f238AfE7398bD0F8af343B";
   let roleId = "0x155b913d2d0d74d66b10fd01138ed2efb49eae4719aaf5c0397d309d9b6137a2";

@@ -9,6 +9,7 @@ const {
 const addresses = require("../test-config.js");
 const BigNumber = require("bignumber.js");
 const IERC20 = artifacts.require("IERC20");
+const RewardForwarder = artifacts.require("RewardForwarder");
 
 //const Strategy = artifacts.require("");
 const Strategy = artifacts.require("MorphoVaultStrategyMainnet_CHY_USDC");
@@ -78,6 +79,9 @@ describe("Base Mainnet Morpho Vault CHY USDC", function() {
 
     // whale send underlying to farmers
     await setupBalance();
+
+    const newForwarder = await RewardForwarder.new(controller.address, {from: governance});
+    await controller.setRewardForwarder(newForwarder.address, {from: governance});
 
     await strategy.toggleMerklOperator("0x3Ef3D8bA38EBe18DB133cEc108f4D14CE00Dd9Ae", "0x6a74649aCFD7822ae8Fb78463a9f2192752E5Aa2", {from: governance});
     await strategy.toggleMerklOperator("0x3Ef3D8bA38EBe18DB133cEc108f4D14CE00Dd9Ae", "0xFeed4C53d827AEBEBED6066788065eA1027C7e70", {from: governance});

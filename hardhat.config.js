@@ -3,6 +3,7 @@ require("@nomiclabs/hardhat-truffle5");
 require("@nomiclabs/hardhat-web3");
 require("@nomiclabs/hardhat-ethers");
 require('hardhat-contract-sizer');
+require("hardhat-gas-reporter");
 
 require('dotenv').config()
 
@@ -22,7 +23,7 @@ module.exports = {
       chainId: 8453,
       forking: {
         url: `https://base-mainnet.g.alchemy.com/v2/${process.env.ALCHEMEY_KEY}`,
-        blockNumber: 36568650, // <-- edit here
+        blockNumber: 37210850, // <-- edit here
       },
       allowUnlimitedContractSize: true,
     },
@@ -57,5 +58,8 @@ module.exports = {
     disambiguatePaths: false,
     runOnCompile: false,
     strict: false,
+  },
+  gasReporter: {
+    enabled: true,
   },
 };
