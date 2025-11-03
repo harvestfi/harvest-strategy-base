@@ -14,7 +14,7 @@ const RewardForwarder = artifacts.require("RewardForwarder");
 //const Strategy = artifacts.require("");
 const Strategy = artifacts.require("MorphoVaultStrategyMainnet_CHY_USDC");
 
-// Developed and tested at blockNumber 35093700
+// Developed and tested at blockNumber 37441500
 
 // Vanilla Mocha test. Increased compatibility with tools that integrate Mocha.
 describe("Base Mainnet Morpho Vault CHY USDC", function() {
@@ -27,6 +27,10 @@ describe("Base Mainnet Morpho Vault CHY USDC", function() {
   let underlyingWhale = "0x796Ce6Db8e97981707B99eb2259ed132515f0B69";
   let morphoWhale = "0xbC5a4A09450B4106bE9a4DF3d85dA3F4617e819F";
   let morpho = "0xBAa5CC21fd487B8Fcc2F632f3F4E8D37262a0842";
+  let yousdWhale = "0x56877D4F7A20FFAC44bB69afBa74B0a6e97b4e90";
+  let yousd = "0x0000000f2eB9f69274678c76222B35eEc7588a65";
+  let usdc = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
+  let yousdToken;
   let morphoToken;
 
   // parties in the protocol
@@ -45,12 +49,14 @@ describe("Base Mainnet Morpho Vault CHY USDC", function() {
     underlying = await IERC20.at("0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913");
     console.log("Fetching Underlying at: ", underlying.address);
     morphoToken = await IERC20.at(morpho);
+    yousdToken = await IERC20.at(yousd);
   }
 
   async function setupBalance(){
     let etherGiver = accounts[9];
     await web3.eth.sendTransaction({ from: etherGiver, to: underlyingWhale, value: 10e18});
     await web3.eth.sendTransaction({ from: etherGiver, to: morphoWhale, value: 10e18});
+    await web3.eth.sendTransaction({ from: etherGiver, to: yousdWhale, value: 10e18});
 
     farmerBalance = await underlying.balanceOf(underlyingWhale);
     await underlying.transfer(farmer1, farmerBalance, { from: underlyingWhale });
@@ -63,7 +69,7 @@ describe("Base Mainnet Morpho Vault CHY USDC", function() {
     farmer1 = accounts[1];
 
     // impersonate accounts
-    await impersonates([governance, underlyingWhale, morphoWhale]);
+    await impersonates([governance, underlyingWhale, morphoWhale, yousdWhale]);
 
     let etherGiver = accounts[9];
     await web3.eth.sendTransaction({ from: etherGiver, to: governance, value: 10e18});
@@ -75,6 +81,9 @@ describe("Base Mainnet Morpho Vault CHY USDC", function() {
       "strategyArtifactIsUpgradable": true,
       "underlying": underlying,
       "governance": governance,
+      "liquidation": [
+        {"erc4626": [yousd, usdc]}
+      ]
     });
 
     // whale send underlying to farmers
@@ -85,6 +94,9 @@ describe("Base Mainnet Morpho Vault CHY USDC", function() {
 
     await strategy.toggleMerklOperator("0x3Ef3D8bA38EBe18DB133cEc108f4D14CE00Dd9Ae", "0x6a74649aCFD7822ae8Fb78463a9f2192752E5Aa2", {from: governance});
     await strategy.toggleMerklOperator("0x3Ef3D8bA38EBe18DB133cEc108f4D14CE00Dd9Ae", "0xFeed4C53d827AEBEBED6066788065eA1027C7e70", {from: governance});
+
+    await strategy.addRewardToken(yousd, {from: governance});
+    await strategy.setDistributionTime(yousd, 43200, {from: governance});
   });
 
   describe("Happy path", function() {
@@ -102,6 +114,7 @@ describe("Base Mainnet Morpho Vault CHY USDC", function() {
 
         if (i % 3 == 0) {
           await morphoToken.transfer(strategy.address, new BigNumber(1e18), {from: morphoWhale});
+          await yousdToken.transfer(strategy.address, new BigNumber(1e6), {from: yousdWhale});
         }
         
         oldSharePrice = new BigNumber(await vault.getPricePerFullShare());
