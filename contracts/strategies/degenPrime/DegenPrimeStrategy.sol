@@ -269,7 +269,7 @@ contract DegenPrimeStrategy is BaseUpgradeableStrategy {
    */
   function _redeem(uint256 amountUnderlying) internal {
     address _rewardPool = rewardPool();
-    IPrimePool(_rewardPool).withdrawInstant(amountUnderlying);
+    IPrimePool(_rewardPool).instantWithdraw(amountUnderlying);
   }
 
   /**
@@ -278,7 +278,7 @@ contract DegenPrimeStrategy is BaseUpgradeableStrategy {
   function _redeemAll() internal {
     address _rewardPool = rewardPool();
     if (IERC20(_rewardPool).balanceOf(address(this)) > 0) {
-      IPrimePool(_rewardPool).withdrawInstant(
+      IPrimePool(_rewardPool).instantWithdraw(
         IERC20(_rewardPool).balanceOf(address(this)).sub(pendingFee())
       );
     }

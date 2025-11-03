@@ -14,7 +14,7 @@ const IPrimePool = artifacts.require("IPrimePool");
 //const Strategy = artifacts.require("");
 const Strategy = artifacts.require("DegenPrimeStrategyMainnet_ETH");
 
-// Developed and tested at blockNumber 36568650
+// Developed and tested at blockNumber 37686275
 
 // Vanilla Mocha test. Increased compatibility with tools that integrate Mocha.
 describe("Base Mainnet DegenPrime ETH", function() {
@@ -24,10 +24,10 @@ describe("Base Mainnet DegenPrime ETH", function() {
   let underlying;
 
   // external setup
-  let underlyingWhale = "0x3ef000Bae3e8105be55F76FDa784fD7d69CFf30e";
+  let underlyingWhale = "0xd8C5763bFB0BDcC87a900DE8D77bd09ED034ab75";
   let roleAdmin = "0xCD053EeA1B82867c491dECe0A8833941849771D0";
   let roleAddr = "0x59753f99E275a3A291f238AfE7398bD0F8af343B";
-  let roleId = "0x155b913d2d0d74d66b10fd01138ed2efb49eae4719aaf5c0397d309d9b6137a2";
+  let roleId = "0x59039237b51922937d698dda66a050d2ad2ef561de98cd2bf15eea92154697ac";
   let roleContract;
 
   // parties in the protocol

@@ -14,7 +14,7 @@ const IPrimePool = artifacts.require("IPrimePool");
 //const Strategy = artifacts.require("");
 const Strategy = artifacts.require("DegenPrimeStrategyMainnet_USDC");
 
-// Developed and tested at blockNumber 36568650
+// Developed and tested at blockNumber 37686275
 
 // Vanilla Mocha test. Increased compatibility with tools that integrate Mocha.
 describe("Base Mainnet DegenPrime USDC", function() {
@@ -24,10 +24,10 @@ describe("Base Mainnet DegenPrime USDC", function() {
   let underlying;
 
   // external setup
-  let underlyingWhale = "0x6e510E3479d5D1958B0c5D4568891ADffeCDEe65";
+  let underlyingWhale = "0x4420AF9ef07A9CeEd9489479e08034A2d633532A";
   let roleAdmin = "0xCD053EeA1B82867c491dECe0A8833941849771D0";
   let roleAddr = "0x59753f99E275a3A291f238AfE7398bD0F8af343B";
-  let roleId = "0x155b913d2d0d74d66b10fd01138ed2efb49eae4719aaf5c0397d309d9b6137a2";
+  let roleId = "0x59039237b51922937d698dda66a050d2ad2ef561de98cd2bf15eea92154697ac";
   let roleContract;
 
   // parties in the protocol
