@@ -129,7 +129,7 @@ contract ExtraFiLendStrategy is BaseUpgradeableStrategy {
   function _handleFee() internal {
     _accrueFee();
     uint256 fee = pendingFee();
-    if (fee > 10) {
+    if (fee > 1e3) {
       uint256 balanceIncrease = fee.mul(feeDenominator()).div(totalFeeNumerator());
       _redeem(fee);
       address _underlying = underlying();
