@@ -121,7 +121,7 @@ contract MoonwellFoldStrategyV2 is BaseUpgradeableStrategy {
   function _handleFee() internal {
     _accrueFee();
     uint256 fee = pendingFee();
-    if (fee > 1e13) {
+    if (fee > 1e3) {
       _redeem(fee);
       address _underlying = underlying();
       fee = Math.min(fee, IERC20(_underlying).balanceOf(address(this)));
@@ -285,7 +285,7 @@ contract MoonwellFoldStrategyV2 is BaseUpgradeableStrategy {
     _notifyProfitInRewardToken(_rewardToken, rewardBalance);
     uint256 remainingRewardBalance = IERC20(_rewardToken).balanceOf(address(this));
 
-    if (remainingRewardBalance < 1e10) {
+    if (remainingRewardBalance < 1e13) {
       return;
     }
   
