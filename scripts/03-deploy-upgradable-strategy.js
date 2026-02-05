@@ -29,6 +29,13 @@ async function main() {
   result.strategy = proxy.creates
 
   console.log(result)
+
+  try {
+    await hre.run("verify:verify", {address: impl.creates}); 
+  } catch (e) {
+    console.log(e)
+  }
+
 }
 
 main()
