@@ -641,6 +641,12 @@ contract CLVault is ERC20Upgradeable, ERC721HolderUpgradeable, IUpgradeSource, C
       oldLiq
     );
     if (tickLowerNew == _tickLower() && tickUpperNew == _tickUpper()) {
+      // Nothing to rebalance — but `_ensurePositionInVault` above has already pulled the NFT out
+      // of the gauge. Without re-staking here the position sits idle in the vault earning no
+      // emissions until the next deposit/withdraw/successful rebalance. This path is reachable
+      // in production: the checker sees out-of-range, and by the time the tx lands the price has
+      // moved back, so the recentred range equals the current one.
+      _restakePosition();
       return;
     }
     // liquidityAmount == totalLiquidity here: a rebalance always burns the whole position.
