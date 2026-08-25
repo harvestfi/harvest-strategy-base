@@ -1,0 +1,40 @@
+{
+  "name": "eurc-usdc-w1",
+  "addressesPath": "test/test-config.js",
+
+  "_comment_pool": "EURC/USDC tickSpacing=50 on the FIRST Slipstream deployment (no gauge penalty). Pool 0xE846373C1a92B167b4E9cd5d8E4d6B1Db9E90EC7, gauge 0x1f6c9d116CE22b51b0BC666f86B038a6c19900B8.",
+  "_comment_width": "posWidth=1 -> 50 ticks -> 0.50% range. Backtest: ~35.6% AERO APR, ~1.7 rebalances/day, ~14.7% net. The tighter arm of the A/B.",
+  "_comment_seed": "posId must be a 50-tick-wide position minted with scripts/17-mint-cl-seed-position.js (CL_WIDTH=1).",
+
+  "posId": "75558417",
+  "posManager": "0x827922686190790b37229fd06084350E74485b72",
+  "targetWidth": "1",
+  "strategyName": "AerodromeCLStrategyMainnet_EURC_USDC",
+
+  "_comment_helper": "Deploy a FRESH helper with scripts/18-deploy-cl-helper.js and use the same address in every arm. Do NOT reuse 0x363a2E33196953b23EF45Bb9E79d4d1fD3007351 - it still exposes validateSpotWithinTwap/peekTwapSqrtPriceX96, so it predates the spot-based planner, the price-impact correction and the per-side burn mins, i.e. it still has the 50-percent-stranding bug.",
+  "rebalanceHelper": "0x74a343dECf3b4578B07D0F7b7577aB2f3c4762b2",
+  "deploySharedHelper": false,
+
+  "rebalance": {
+    "deviation": 0,
+    "cooldown": 5,
+    "executor": "0xaba4ba582E04B729ABCd2Bae0d7c14fe21C9F510",
+    "maxSwapBps": 10000,
+    "maxSlippageBps": 100,
+    "twapWindow": 120,
+    "maxTwapDeviationBps": 200
+  },
+
+  "strategy": {
+    "minRewardToCompound": "10000000000000000",
+    "rewardToken": "0x940181a94A35A4569E4529A3CDfB74e38FD98631"
+  },
+
+  "_comment_wrappers": "Deploys two CLWrapper instances per vault (token0-denominated and token1-denominated). Each is constructed against the bridge Storage and flipped to real governance with the rest of the stack.",
+  "wrappers": { "deploy": true },
+
+  "useSetupStorage": true,
+  "finalizeStorage": true,
+  "verify": true,
+  "snapshotPath": "scripts/deployments/cl/eurc-usdc-w1.json"
+}

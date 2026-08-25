@@ -7,6 +7,14 @@ function isAddress(value) {
   return typeof value === "string" && /^0x[0-9a-fA-F]{40}$/.test(value);
 }
 
+// Deploy configs are committed as templates: values that can only be known at deploy time
+// (the seed position tokenId, the shared helper address) are written as REPLACE_WITH_* sentinels.
+// `posId` has always been tolerated in that state via assertStringLike; treat every sentinel the
+// same way and report them together, rather than address-validating one field and not the other.
+function isPlaceholder(value) {
+  return typeof value === "string" && /^REPLACE_WITH_[A-Z0-9_]+$/.test(value);
+}
+
 function isZeroAddress(value) {
   return /^0x0{40}$/i.test(value || "");
 }
@@ -39,9 +47,18 @@ function assertStringLike(name, value) {
   }
 }
 
-function validateConfig(config, file) {
+function validateConfig(config, file, pending) {
+  const note = (field, value) => {
+    if (isPlaceholder(value)) {
+      pending.push(`${file}: ${field} = ${value}`);
+      return true;
+    }
+    return false;
+  };
+
   assertStringLike("name", config.name);
   assertStringLike("posId", config.posId);
+  note("posId", config.posId);
   assertStringLike("targetWidth", config.targetWidth);
   assertStringLike("strategyName", config.strategyName);
 
@@ -69,7 +86,7 @@ function validateConfig(config, file) {
     if (config.rebalanceHelper && !isZeroAddress(config.rebalanceHelper)) {
       throw new Error(`deploySharedHelper=true expects rebalanceHelper omitted/zero in ${file}`);
     }
-  } else {
+  } else if (!note("rebalanceHelper", config.rebalanceHelper)) {
     if (!isAddress(config.rebalanceHelper) || isZeroAddress(config.rebalanceHelper)) {
       throw new Error(`rebalanceHelper must be non-zero when deploySharedHelper=false in ${file}`);
     }
@@ -91,10 +108,11 @@ function main() {
   }
 
   let deploySharedHelperCount = 0;
+  const pending = [];
   for (const file of files) {
     const full = path.join(CONFIG_DIR, file);
     const config = JSON.parse(fs.readFileSync(full, "utf8"));
-    validateConfig(config, file);
+    validateConfig(config, file, pending);
     if (config.deploySharedHelper) {
       deploySharedHelperCount += 1;
     }
@@ -105,6 +123,11 @@ function main() {
   }
 
   console.log(`CL config preflight passed for ${files.length} config(s): ${files.join(", ")}`);
+
+  if (pending.length > 0) {
+    console.log(`\n${pending.length} unfilled placeholder(s) - these configs are templates and are NOT deployable as-is:`);
+    for (const p of pending) console.log(`  - ${p}`);
+  }
 }
 
 try {

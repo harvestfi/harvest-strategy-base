@@ -1,0 +1,41 @@
+{
+  "name": "weth-cbbtc-f1-w16",
+  "addressesPath": "test/test-config.js",
+
+  "_comment_pool": "WETH/cbBTC tickSpacing=100 on the FIRST Slipstream deployment. Pool 0x70aCDF2Ad0bf2402C957154f944c19Ef4e1cbAE1, gauge 0x41b2126661C673C2beDd208cC72E85DC51a5320a. Verified penalty-free: penaltyRate()/minStakeTimes()/defaultMinStakeTime() all revert on gauge factory 0xD30677bd8dd15132F251Cb54CbDA552d2A05Fb08. NOT the F2 tickSpacing-10 pool, which is deeper but carries the early-exit penalty.",
+  "_comment_width": "posWidth=16 -> 1600 ticks -> 17.35% range. Wide arm. Backtest 14d: 7.4% AERO APR, 0.07 rebalances/day, 100% in-range, -3.3% cost APR. Best sub-window median of any width tested (+8 vs -138 at w8).",
+  "_comment_ab": "Three arms (w4/w8/w16) differ in targetWidth ONLY. Every other parameter is identical on purpose so the width is the single variable under test. Rebalance settings are copied verbatim from the live tBTC/cbBTC vault 0xF83648Df279004CdcEee1bEE3a92b9194Cd3b94E so the new arms behave identically to production.",
+  "_comment_seed": "posId must be a 1600-tick-wide position minted with scripts/17-mint-cl-seed-position.js (CL_POOL=0x70aCDF2Ad0bf2402C957154f944c19Ef4e1cbAE1 CL_NPM=0x827922686190790b37229fd06084350E74485b72 CL_WIDTH=16).",
+
+  "posId": "75558747",
+  "posManager": "0x827922686190790b37229fd06084350E74485b72",
+  "targetWidth": "16",
+  "strategyName": "AerodromeCLStrategyMainnet_WETH_cbBTC_F1",
+
+  "_comment_helper": "Deploy a FRESH helper with scripts/18-deploy-cl-helper.js and use the same address in every arm. Do NOT reuse 0x363a2E33196953b23EF45Bb9E79d4d1fD3007351 - it still exposes validateSpotWithinTwap/peekTwapSqrtPriceX96, so it predates the spot-based planner, the price-impact correction and the per-side burn mins, i.e. it still has the 50-percent-stranding bug.",
+  "rebalanceHelper": "0x74a343dECf3b4578B07D0F7b7577aB2f3c4762b2",
+  "deploySharedHelper": false,
+
+  "rebalance": {
+    "deviation": 0,
+    "cooldown": 5,
+    "executor": "0xaba4ba582E04B729ABCd2Bae0d7c14fe21C9F510",
+    "maxSwapBps": 10000,
+    "maxSlippageBps": 100,
+    "twapWindow": 120,
+    "maxTwapDeviationBps": 200
+  },
+
+  "strategy": {
+    "minRewardToCompound": "10000000000000000",
+    "rewardToken": "0x940181a94A35A4569E4529A3CDfB74e38FD98631"
+  },
+
+  "_comment_wrappers": "Deploys two CLWrapper instances per vault (token0-denominated and token1-denominated). Each is constructed against the bridge Storage and flipped to real governance with the rest of the stack.",
+  "wrappers": { "deploy": true },
+
+  "useSetupStorage": true,
+  "finalizeStorage": true,
+  "verify": true,
+  "snapshotPath": "scripts/deployments/cl/weth-cbbtc-f1-w16.json"
+}

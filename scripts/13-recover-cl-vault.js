@@ -13,7 +13,7 @@
 //
 // Usage:
 //   CL_CONFIG=scripts/config/pilot-cbeth-eth.recovery.json CL_VERIFY=true \
-//     npx hardhat run --network base scripts/13-recover-cl-vault.js
+//     npx hardhat run --network mainnet scripts/13-recover-cl-vault.js
 //
 // Config schema (extends 12's config — keep all original fields and add `recovery`):
 //   {
@@ -40,7 +40,7 @@ const ZERO = "0x0000000000000000000000000000000000000000";
 
 function ensureHardhatRunner() {
   if (typeof artifacts === "undefined" || typeof artifacts.require !== "function") {
-    throw new Error("Run via Hardhat: `npx hardhat run --network base scripts/13-recover-cl-vault.js`");
+    throw new Error("Run via Hardhat: `npx hardhat run --network mainnet scripts/13-recover-cl-vault.js`");
   }
 }
 

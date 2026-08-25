@@ -41,7 +41,7 @@ function ensureHardhatRunner() {
       "This script must be invoked through Hardhat's runner so that the `artifacts` global is set.\n" +
       "  Wrong: node scripts/12-deploy-CL-vault.js\n" +
       "  Right: CL_CONFIG=scripts/config/pilot-cbeth-eth.json \\\n" +
-      "         npx hardhat run --network base scripts/12-deploy-CL-vault.js"
+      "         npx hardhat run --network mainnet scripts/12-deploy-CL-vault.js"
     );
   }
 }
@@ -143,7 +143,7 @@ async function main() {
     throw new Error(
       "Config-driven deploy required. Use the CL_CONFIG environment variable:\n" +
       "  CL_CONFIG=<path-to-json> CL_VERIFY=true \\\n" +
-      "    npx hardhat run --network base scripts/12-deploy-CL-vault.js\n" +
+      "    npx hardhat run --network mainnet scripts/12-deploy-CL-vault.js\n" +
       "(`npx hardhat run` does not pass through extra CLI flags — it rejects them with HH305.)"
     );
   }
@@ -198,7 +198,7 @@ async function main() {
     if (!provided || /^0x0{40}$/i.test(provided)) {
       throw new Error(
         "Bridge Storage required but not configured. Either:\n" +
-        "  (a) deploy one via `npx hardhat run --network base scripts/15-deploy-setup-storage.js`\n" +
+        "  (a) deploy one via `npx hardhat run --network mainnet scripts/15-deploy-setup-storage.js`\n" +
         "      and paste its address into test/test-config.js under `SetupStorage`, or\n" +
         "  (b) set `setupStorageAddress` in the deploy config, or\n" +
         "  (c) set `useSetupStorage: false` if the deployer EOA is already the protocol's governance."
@@ -436,7 +436,11 @@ async function main() {
 
   await maybeVerify(args.verify || config.verify, {
     vault: vaultAddr,
-    storage: addresses.Storage,
+    // The CLWrapper constructor received `setupStorageAddr`, not `addresses.Storage` — the bridge
+    // flip happens afterwards via setStorage. Etherscan matches constructor args against the ones
+    // embedded in the deployment bytecode, so verification must use the value actually passed at
+    // construction or it fails with a constructor-arguments mismatch.
+    storage: setupStorageAddr,
     strategyImpl: impl.creates,
     wrapper0: wrapper0Addr,
     wrapper1: wrapper1Addr,

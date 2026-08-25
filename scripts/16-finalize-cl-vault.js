@@ -5,7 +5,7 @@
 //
 // Usage:
 //   CL_SNAPSHOT=scripts/deployments/cl/pilot-cbeth-eth.json \
-//     npx hardhat run --network base scripts/16-finalize-cl-vault.js
+//     npx hardhat run --network mainnet scripts/16-finalize-cl-vault.js
 const fs = require("fs");
 const path = require("path");
 const hre = require("hardhat");
@@ -17,7 +17,7 @@ const CLWrapper = artifacts.require("CLWrapper");
 
 function ensureHardhatRunner() {
   if (typeof artifacts === "undefined" || typeof artifacts.require !== "function") {
-    throw new Error("Run via Hardhat: `npx hardhat run --network base scripts/16-finalize-cl-vault.js`");
+    throw new Error("Run via Hardhat: `npx hardhat run --network mainnet scripts/16-finalize-cl-vault.js`");
   }
 }
 
