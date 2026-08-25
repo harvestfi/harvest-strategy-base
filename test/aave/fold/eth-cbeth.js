@@ -43,6 +43,7 @@ describe("Base Mainnet Aave Fold cbETH-ETH", function() {
   const aavePoolAddress = "0xA238Dd80C259a72e81d7e4664a9801593F98d1c5";
   const HEALTHY_MIN = new BigNumber("1000000000000000000");
   const DUST_TOLERANCE = new BigNumber("1000000000000");
+  const MAX_UINT = new BigNumber(2).pow(256).minus(1);
 
   async function takeSnapshot() {
     return hre.network.provider.request({
@@ -210,6 +211,45 @@ describe("Base Mainnet Aave Fold cbETH-ETH", function() {
 
     const checkerAfter = await strategy.checker();
     assert.equal(checkerAfter[0], false, "position should be back in bounds after deleveraging");
+  });
+
+  it("keeps checker() callable when governance zeroes the borrow target", async function() {
+    await investHalfOfFarmerBalance();
+    Utils.assertBNGt((await getPosition()).borrowed, 0);
+
+    // Winding the position down by zeroing the borrow target makes targetHealth()
+    // type(uint256).max. The checker used to evaluate `health < (targetHealth() * 99) / 100`
+    // unguarded, so it reverted with an arithmetic overflow (panic 0x11) instead of
+    // answering. It must stay callable, and report work while debt is outstanding.
+    await strategy.setBorrowTargetFactorNumerator(0, { from: governance });
+    Utils.assertBNEq(await strategy.targetHealth(), MAX_UINT);
+
+    const checkerLevered = await strategy.checker();
+    assert.equal(checkerLevered[0], true, "a zero borrow target with debt outstanding needs a hard work");
+
+    await controller.doHardWork(vault.address, { from: governance });
+
+    // This is the live on-chain state: fold() still true, borrow target 0, debt repaid.
+    // The checker must report "nothing to do" rather than reverting.
+    Utils.assertBNEq((await getPosition()).borrowed, 0);
+    assert.equal(await strategy.fold(), true, "fold stays enabled");
+    Utils.assertBNEq(await strategy.borrowTargetFactorNumerator(), 0);
+
+    const checkerUnwound = await strategy.checker();
+    assert.equal(checkerUnwound[0], false, "a fully unwound position should not trigger the checker");
+  });
+
+  it("keeps checker() callable after setFold(false)", async function() {
+    await investHalfOfFarmerBalance();
+
+    // setFold(false) zeroes the borrow target too, so targetHealth() is
+    // type(uint256).max on this path as well - the same overflow trap.
+    await strategy.setFold(false, { from: governance });
+    Utils.assertBNEq(await strategy.borrowTargetFactorNumerator(), 0);
+    Utils.assertBNEq(await strategy.targetHealth(), MAX_UINT);
+
+    const checker = await strategy.checker();
+    assert.equal(checker[0], false, "an unlevered strategy should not trigger the checker");
   });
 
   it("setFold(false) fully unwinds debt and keeps future hard work unlevered", async function() {
