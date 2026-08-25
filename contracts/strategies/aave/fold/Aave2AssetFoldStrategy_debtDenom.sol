@@ -118,13 +118,22 @@ contract Aave2AssetFoldStrategy_debtDenom is BaseUpgradeableStrategy {
   function checker() external view returns (bool canExec, bytes memory execPayload) {
     PositionSnap memory s = _snapPosition();
     uint256 cl = _effectiveCollateralFactorNumerator();
+    uint256 target = borrowTargetFactorNumerator();
+    // Mirrors the unwind condition in _depositWithFlashloan: a zero borrow
+    // target, or a collateral limit that has fallen to/below the target, means
+    // the position must be fully unwound, so there is work to do while any debt
+    // remains. Once the debt is repaid this goes quiet instead of looping.
+    bool unwind = fold() && s.borrowedDebt > 0 && (target == 0 || cl <= target);
+    // _targetHealthFrom returns type(uint256).max when there is no leverage
+    // target at all (not folding, or target == 0). Scaling that by 99/100 would
+    // overflow and revert this view, so the health branch is skipped in that
+    // case — `unwind` above already covers the only work it could imply.
+    uint256 th = _targetHealthFrom(cl);
+    bool belowTarget = th != type(uint256).max && s.health < (th * 99) / 100;
     // Only fire when the next hard-work has work to do that can actually
     // succeed; both branches here are deleverage / repay paths and only need
     // repay availability (paused borrow side blocks even repay).
-    canExec = (_borrowFlags() & 4 != 0) && (
-      (fold() && s.borrowedDebt > 0 && cl <= borrowTargetFactorNumerator()) ||
-      s.health < (_targetHealthFrom(cl) * 99) / 100
-    );
+    canExec = (_borrowFlags() & 4 != 0) && (unwind || belowTarget);
     execPayload = abi.encodeWithSelector(IController.doHardWork.selector, vault());
   }
 
