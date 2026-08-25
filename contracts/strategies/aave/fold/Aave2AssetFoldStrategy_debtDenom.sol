@@ -131,9 +131,14 @@ contract Aave2AssetFoldStrategy_debtDenom is BaseUpgradeableStrategy {
     uint256 th = _targetHealthFrom(cl);
     bool belowTarget = th != type(uint256).max && s.health < (th * 99) / 100;
     // Only fire when the next hard-work has work to do that can actually
-    // succeed; both branches here are deleverage / repay paths and only need
-    // repay availability (paused borrow side blocks even repay).
-    canExec = (_borrowFlags() & 4 != 0) && (unwind || belowTarget);
+    // succeed. Both branches are deleverage paths, and a deleverage repays on
+    // the borrow side AND withdraws collateral on the supply side
+    // (_onFlashWithdraw -> _redeem -> IPool.withdraw), so BOTH reserves must
+    // allow repay/withdraw. A pause on either one blocks the unwind, and
+    // firing anyway would only burn keeper gas on a hard-work that reverts
+    // until the pause lifts. _handleFee already gates its collateral leg the
+    // same way.
+    canExec = (_borrowFlags() & 4 != 0) && (_supplyFlags() & 4 != 0) && (unwind || belowTarget);
     execPayload = abi.encodeWithSelector(IController.doHardWork.selector, vault());
   }
 

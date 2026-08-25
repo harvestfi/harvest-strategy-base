@@ -354,7 +354,7 @@ describe("Base Mainnet Aave Fold cbETH-ETH resilience", function() {
       Utils.assertBNGte(new BigNumber("1e15"), pos.looseUnderlying);
     });
 
-    it("collateral paused: invest path holds idle, checker does not fire", async function() {
+    it("collateral paused: invest path holds idle", async function() {
       await aaveSetPause(cbeth, true);
 
       const amount = new BigNumber(await underlying.balanceOf(farmer1))
@@ -364,6 +364,28 @@ describe("Base Mainnet Aave Fold cbETH-ETH resilience", function() {
       const pos = await getPosition();
       Utils.assertBNGt(pos.looseUnderlying, 0);
       Utils.assertBNEq(pos.looseCollateral, 0);
+    });
+
+    it("collateral paused: checker stops requesting a deleverage it cannot finish", async function() {
+      await investHalfOfFarmerBalance();
+      await strategy.setBorrowTargetFactorNumerator(8000, { from: governance });
+
+      const cActive = await strategy.checker();
+      assert.equal(cActive[0], true, "tighter target should request a deleverage maintenance run");
+
+      // A deleverage repays on the borrow side but also withdraws collateral
+      // (_onFlashWithdraw -> _redeem). Pausing the collateral reserve blocks
+      // that leg while the borrow side still looks fine, so the checker has to
+      // consult the supply reserve too or it would keep asking for a hard-work
+      // that reverts for the whole duration of the pause.
+      await aaveSetPause(cbeth, true);
+      const cPaused = await strategy.checker();
+      assert.equal(cPaused[0], false, "checker should not request work while collateral withdrawal is paused");
+
+      // And it recovers on its own once Aave reopens the reserve - no tx needed.
+      await aaveSetPause(cbeth, false);
+      const cResumed = await strategy.checker();
+      assert.equal(cResumed[0], true, "checker should resume once the collateral reserve reopens");
     });
   });
 
