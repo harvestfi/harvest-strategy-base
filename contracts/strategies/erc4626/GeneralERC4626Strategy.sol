@@ -7,15 +7,19 @@ import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "../../base/interface/IUniversalLiquidator.sol";
 import "../../base/upgradability/BaseUpgradeableStrategy.sol";
 import "../../base/interface/IERC4626.sol";
+import "../../base/interface/IHardWorkHooks.sol";
 
 /**
  * @title GeneralERC4626Strategy
  * @dev A strategy that invests underlying assets into an ERC4626 compliant vault, providing yield and rewards.
  */
-contract GeneralERC4626Strategy is BaseUpgradeableStrategy {
+contract GeneralERC4626Strategy is BaseUpgradeableStrategy, IHardWorkHooks {
 
   using SafeMath for uint256;
   using SafeERC20 for IERC20;
+
+  /// @notice Emitted when a fee redemption was refused by the vault and left pending.
+  event FeeRedeemDeferred(uint256 amount);
 
   address public constant harvestMSIG = address(0x97b3e5712CDE7Db13e939a188C8CA90Db5B05131);
 
@@ -143,7 +147,14 @@ contract GeneralERC4626Strategy is BaseUpgradeableStrategy {
           IERC4626(_fToken).maxWithdraw(address(this))
         );
         if (redeemable > 0) {
-          _redeem(redeemable);
+          // The vault may refuse this redemption - a redemption delay, a withdrawal
+          // queue, or not enough instantly available liquidity. Leaving the fee in
+          // pendingFee and retrying on the next call is correct; reverting here would
+          // block doHardWork() and withdrawAllToVault() for everyone.
+          try IERC4626(_fToken).withdraw(redeemable, address(this), address(this)) returns (uint256) {
+          } catch {
+            emit FeeRedeemDeferred(redeemable);
+          }
         }
       }
       fee = Math.min(fee, IERC20(_underlying).balanceOf(address(this)));
@@ -225,9 +236,9 @@ contract GeneralERC4626Strategy is BaseUpgradeableStrategy {
     _redeem(toRedeem);
     balance = IERC20(_underlying).balanceOf(address(this));
     IERC20(_underlying).safeTransfer(vault(), Math.min(amountUnderlying, balance));
-    if (balance > 1e3) {
-      _investAllUnderlying();
-    }
+    // Any residue stays idle and is supplied by the next doHardWork(). Re-supplying it
+    // here would deposit into the vault immediately after redeeming from it, which some
+    // yield sources forbid.
     _updateStoredBalance();
   }
 
@@ -393,6 +404,30 @@ contract GeneralERC4626Strategy is BaseUpgradeableStrategy {
     _handleFee();
     _liquidateRewards();
     _investAllUnderlying();
+    _updateStoredBalance();
+  }
+
+  /**
+   * @notice Whether this strategy implements the optional hard work hooks.
+   * @return Always true.
+   */
+  function supportsHardWorkHooks() external pure returns (bool) {
+    return true;
+  }
+
+  /**
+   * @notice Hard work run inside a user's withdrawal transaction by a hook-aware vault.
+   * @dev Everything `doHardWork()` does to credit the exiting user - accrue the fee on
+   * the interest earned since the last call, liquidate rewards into underlying, and
+   * refresh `storedBalance` so `investedUnderlyingBalance()` reflects it - but without
+   * `_investAllUnderlying()`. Supplying here would deposit into the fToken immediately
+   * before the vault redeems from it, which the redemption delay forbids. Underlying
+   * left idle is still counted by `investedUnderlyingBalance()` and is supplied by the
+   * next `doHardWork()`.
+   */
+  function doHardWorkOnWithdraw() external restricted {
+    _handleFee();
+    _liquidateRewards();
     _updateStoredBalance();
   }
 
