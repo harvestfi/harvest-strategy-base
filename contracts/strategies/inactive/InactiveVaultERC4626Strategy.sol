@@ -12,9 +12,9 @@ import "../../base/upgradability/BaseUpgradeableStrategy.sol";
  * @title InactiveVaultERC4626Strategy
  * @dev Strategy for vaults that have been turned inactive. The underlying is parked in a plain
  *      ERC4626 vault so that it is not sitting idle, but 100% of the yield it generates is marked
- *      as fee and forwarded to the fee recipients (profit sharing, platform, strategist) in the
- *      usual proportions. Depositors of an inactive vault keep their principal at a flat share
- *      price and do not earn any yield.
+ *      as fee and forwarded to the fee recipients (profit sharing and platform, in the proportions
+ *      configured in the controller). Depositors of an inactive vault keep their principal at a
+ *      flat share price and do not earn any yield.
  *
  *      Derived from the general ERC4626 strategy: the accounting is identical, except that the
  *      fee taken on a balance increase is the full increase instead of `totalFeeNumerator` of it,
