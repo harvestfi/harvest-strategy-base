@@ -51,7 +51,7 @@ contract VaultV2 is IERC4626, VaultV1 {
      * @notice Returns the maximum amount of assets that can be deposited by the caller.
      * @return Maximum deposit limit as `type(uint256).max` (no limit).
      */
-    function maxDeposit(address /*caller*/) public pure override returns (uint256) {
+    function maxDeposit(address /*caller*/) public view virtual override returns (uint256) {
         return type(uint256).max;
     }
 
@@ -79,7 +79,7 @@ contract VaultV2 is IERC4626, VaultV1 {
      * @notice Returns the maximum amount of shares that can be minted by the caller.
      * @return Maximum mint limit as `type(uint256).max` (no limit).
      */
-    function maxMint(address /*caller*/) public pure override returns (uint256) {
+    function maxMint(address /*caller*/) public view virtual override returns (uint256) {
         return type(uint256).max;
     }
 
