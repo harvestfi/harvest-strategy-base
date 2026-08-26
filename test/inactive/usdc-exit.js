@@ -12,7 +12,7 @@ const IERC20 = artifacts.require("IERC20");
 
 const Strategy = artifacts.require("InactiveVaultERC4626StrategyMainnet_USDC");
 
-// Developed and tested at blockNumber 37210850
+// Developed and tested at blockNumber 50448100
 
 // Vanilla Mocha test. Increased compatibility with tools that integrate Mocha.
 describe("Base Mainnet Inactive Vault ERC4626 USDC exit paths", function() {
