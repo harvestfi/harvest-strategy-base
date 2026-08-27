@@ -169,7 +169,7 @@ contract MorphoVaultV2Strategy is BaseUpgradeableStrategy {
       if (token == _rewardToken) continue;
       _syncRewardStream(token);
       uint256 toSell = _pullClaimable(token);
-      if (toSell > 1e12) {
+      if (toSell > 1e4) {
         IERC20(token).safeApprove(_universalLiquidator, 0);
         IERC20(token).safeApprove(_universalLiquidator, toSell);
         IUniversalLiquidator(_universalLiquidator).swap(token, _rewardToken, toSell, 1, address(this));
@@ -179,7 +179,7 @@ contract MorphoVaultV2Strategy is BaseUpgradeableStrategy {
     _notifyProfitInRewardToken(_rewardToken, rewardBalance);
     uint256 remainingRewardBalance = IERC20(_rewardToken).balanceOf(address(this));
 
-    if (remainingRewardBalance <= 1e12) {
+    if (remainingRewardBalance <= 1e4) {
       return;
     }
   
