@@ -13,13 +13,13 @@ contract IPORLendingStrategyMainnet_AAPL is GeneralERC4626Strategy {
   ) public initializer {
     address underlying = address(0xb200000000000000000000C2e324d24d7eEcd1fb);
     address fToken = address(0x31744E44d6aF88225C1dBEFbe5Df8308fAeA641B);
-    address weth = address(0x4200000000000000000000000000000000000006);
+    address usdc = address(0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913);
     GeneralERC4626Strategy.initializeBaseStrategy(
       _storage,
       underlying,
       _vault,
       fToken,
-      weth
+      usdc
     );
   }
 }

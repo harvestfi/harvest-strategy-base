@@ -13,13 +13,13 @@ contract IPORLendingStrategyMainnet_GOOGL is GeneralERC4626Strategy {
   ) public initializer {
     address underlying = address(0xb2000000000000000000002D0BA3164cc74f58B7);
     address fToken = address(0x01DBDB9748ECf71B1fFbb62f5cB41318531bA362);
-    address weth = address(0x4200000000000000000000000000000000000006);
+    address usdc = address(0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913);
     GeneralERC4626Strategy.initializeBaseStrategy(
       _storage,
       underlying,
       _vault,
       fToken,
-      weth
+      usdc
     );
   }
 }
