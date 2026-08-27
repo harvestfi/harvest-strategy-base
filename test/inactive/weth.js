@@ -11,12 +11,12 @@ const BigNumber = require("bignumber.js");
 const IERC20 = artifacts.require("IERC20");
 const IERC4626 = artifacts.require("contracts/base/interface/IERC4626.sol:IERC4626");
 
-const Strategy = artifacts.require("InactiveVaultERC4626StrategyMainnet_USDC");
+const Strategy = artifacts.require("InactiveVaultERC4626StrategyMainnet_WETH");
 
 // Developed and tested at blockNumber 50472500
 
 // Vanilla Mocha test. Increased compatibility with tools that integrate Mocha.
-describe("Base Mainnet Inactive Vault ERC4626 USDC", function() {
+describe("Base Mainnet Inactive Vault ERC4626 WETH", function() {
   let accounts;
 
   // external contracts
@@ -24,7 +24,7 @@ describe("Base Mainnet Inactive Vault ERC4626 USDC", function() {
   let erc4626Vault;
 
   // external setup
-  let underlyingWhale = "0xDDC976cB693fDa9c7570eC68Df397623E48815e9";
+  let underlyingWhale = "0xeeB17aDeFd06A3c67aBD4AdF7E42978B1f018c8e";
 
   // parties in the protocol
   let governance;
@@ -39,9 +39,9 @@ describe("Base Mainnet Inactive Vault ERC4626 USDC", function() {
   let strategy;
 
   async function setupExternalContracts() {
-    underlying = await IERC20.at("0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913");
+    underlying = await IERC20.at("0x4200000000000000000000000000000000000006");
     // the plain ERC4626 vault the strategy parks the funds in
-    erc4626Vault = await IERC4626.at("0x0d877Dc7C8Fa3aD980DfDb18B48eC9F8768359C4");
+    erc4626Vault = await IERC4626.at("0x7872893e528Fe2c0829e405960db5B742112aa97");
     console.log("Fetching Underlying at: ", underlying.address);
   }
 
@@ -67,7 +67,7 @@ describe("Base Mainnet Inactive Vault ERC4626 USDC", function() {
 
     await setupExternalContracts();
     [controller, vault, strategy] = await setupCoreProtocol({
-      "existingVaultAddress": "0x90613e167D42CA420942082157B42AF6fc6a8087",
+      "existingVaultAddress": "0x0B0193fAD49DE45F5E2B0A9f5D6Bc3BB7D281688",
       "strategyArtifact": Strategy,
       "strategyArtifactIsUpgradable": true,
       "announceStrategy": true,
@@ -77,8 +77,6 @@ describe("Base Mainnet Inactive Vault ERC4626 USDC", function() {
 
     // whale send underlying to farmers
     await setupBalance();
-
-    await vault.setVaultFractionToInvest(100, 100, { from: governance})
   });
 
   describe("Happy path", function() {
