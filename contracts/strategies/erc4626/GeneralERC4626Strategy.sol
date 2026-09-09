@@ -470,7 +470,23 @@ contract GeneralERC4626Strategy is BaseUpgradeableStrategy, IHardWorkHooks {
    */
   function _redeem(uint256 amountUnderlying) internal {
     address _fToken = fToken();
-    IERC4626(_fToken).withdraw(amountUnderlying, address(this), address(this));
+    // Redeem by SHARES, not by assets. `withdraw(assets)` delivers exactly
+    // `amountUnderlying` and takes any vault withdraw fee as extra shares on top, so the
+    // position drops by more than the strategy hands to the vault; VaultV1._withdraw then
+    // prices the exit off the reduced total and the withdrawer bears only a pro-rata slice
+    // of the fee, with the rest landing on every other holder. Burning exactly the shares
+    // worth `amountUnderlying` makes the fee come out of the delivered assets instead: the
+    // position drops by precisely what was asked, and the vault's `min(entitlement, idle)`
+    // charges the whole fee to the user withdrawing. On a fee-free vault the two differ
+    // only by rounding.
+    uint256 shares = Math.min(
+      IERC4626(_fToken).convertToShares(amountUnderlying),
+      IERC20(_fToken).balanceOf(address(this))
+    );
+    if (shares == 0) {
+      return;
+    }
+    IERC4626(_fToken).redeem(shares, address(this), address(this));
   }
 
   /**
