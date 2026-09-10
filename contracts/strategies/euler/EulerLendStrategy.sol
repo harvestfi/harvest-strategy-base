@@ -115,7 +115,7 @@ contract EulerLendStrategy is BaseUpgradeableStrategy {
   }
 
   function feeFloor() public view virtual returns (uint256) {
-    return 1e5;
+    return 1e3;
   }
 
   /**

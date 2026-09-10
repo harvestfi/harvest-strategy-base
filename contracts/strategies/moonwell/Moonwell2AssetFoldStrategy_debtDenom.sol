@@ -182,7 +182,7 @@ contract Moonwell2AssetFoldStrategy_debtDenom is BaseUpgradeableStrategy {
   }
 
   function feeFloor() public view virtual returns (uint256) {
-    return 0;
+    return 1e3;
   }
 
   function _handleFee() internal {
@@ -190,25 +190,62 @@ contract Moonwell2AssetFoldStrategy_debtDenom is BaseUpgradeableStrategy {
     uint256 fee = pendingFee();
     if (fee <= feeFloor()) return;
     address _underlying = underlying();
+    uint256 availableBalance = IERC20(_underlying).balanceOf(address(this));
     if (fold()) {
       if (s.health > targetHealth()){
-        _borrow(fee);
+        // Only borrow the part of the fee that is not already sitting here idle, and only as
+        // much as the market can actually hand out right now. A fee is rounding-sized; it must
+        // never be able to revert `doHardWork()` because the borrow market is dry or capped.
+        if (availableBalance < fee) {
+          address _borrowMToken = borrowMToken();
+          uint256 borrowable = Math.min(fee - availableBalance, MTokenInterface(_borrowMToken).getCash());
+          uint256 borrowCap = ComptrollerInterface(rewardPool()).borrowCaps(_borrowMToken);
+          if (borrowCap > 0) {
+            uint256 totalBorrowed = MTokenInterface(_borrowMToken).totalBorrows();
+            // The comptroller enforces `totalBorrows + amount < borrowCap` strictly, so the
+            // last wei of headroom is not borrowable - hence the extra 1, the same margin
+            // MoonwellFoldStrategyV2 keeps. `totalBorrows()` is also the stored value from
+            // the last accrual, so the real headroom is a little smaller still.
+            uint256 headroom = borrowCap > totalBorrowed ? borrowCap - totalBorrowed : 0;
+            borrowable = Math.min(borrowable, headroom > 1 ? headroom - 1 : 0);
+          }
+          if (borrowable > 0) {
+            _borrow(borrowable);
+          }
+        }
         fee = Math.min(fee, IERC20(_underlying).balanceOf(address(this)));
+        if (fee == 0) {
+          // Nothing could be realised: leave it pending and retry on the next hard work.
+          return;
+        }
         uint256 balanceIncrease = (fee * feeDenominator()) / totalFeeNumerator();
         _notifyProfitInRewardToken(_underlying, balanceIncrease);
         setUint256(_PENDING_FEE_SLOT, pendingFee() - fee);
         return;
       }
     } else {
-      address _supplyAsset = supplyAsset();
-      uint256 toRedeem = fee * s.priceBorrowInSupply / 1e18;
-      toRedeem = (toRedeem * (BPS + slippageBps())) / BPS;
-      _redeem(toRedeem);
-      uint256 collBalance = IERC20(_supplyAsset).balanceOf(address(this));
-      if (collBalance > 0) {
-        _swap(_supplyAsset, _underlying, collBalance, s.priceSupplyInBorrow, s.priceBorrowInSupply);
+      // Same reasoning on the unlevered path: redeem only the shortfall, capped by both our own
+      // supplied collateral and the cash the market is holding.
+      if (availableBalance < fee) {
+        address _supplyAsset = supplyAsset();
+        address _supplyMToken = supplyMToken();
+        uint256 toRedeem = (fee - availableBalance) * s.priceBorrowInSupply / 1e18;
+        toRedeem = (toRedeem * (BPS + slippageBps())) / BPS;
+        uint256 supplied = MTokenInterface(_supplyMToken).balanceOfUnderlying(address(this));
+        toRedeem = Math.min(toRedeem, Math.min(supplied, MTokenInterface(_supplyMToken).getCash()));
+        if (toRedeem > 0) {
+          _redeem(toRedeem);
+          uint256 collBalance = IERC20(_supplyAsset).balanceOf(address(this));
+          if (collBalance > 0) {
+            _swap(_supplyAsset, _underlying, collBalance, s.priceSupplyInBorrow, s.priceBorrowInSupply);
+          }
+        }
       }
       fee = Math.min(fee, IERC20(_underlying).balanceOf(address(this)));
+      if (fee == 0) {
+        // Nothing could be realised: leave it pending and retry on the next hard work.
+        return;
+      }
       uint256 balanceIncrease = (fee * feeDenominator()) / totalFeeNumerator();
       _notifyProfitInRewardToken(_underlying, balanceIncrease);
       setUint256(_PENDING_FEE_SLOT, pendingFee() - fee);

@@ -91,16 +91,25 @@ contract MorphoVaultV2Strategy is BaseUpgradeableStrategy {
   }
 
   function feeFloor() public view virtual returns (uint256) {
-    return 1e4;
+    return 1e3;
   }
 
   function _handleFee() internal {
     _accrueFee();
     uint256 fee = pendingFee();
     if (fee > feeFloor()) {
-      _redeem(fee);
       address _underlying = underlying();
+      uint256 availableBalance = IERC20(_underlying).balanceOf(address(this));
+      if (availableBalance < fee) {
+        uint256 redeemable = Math.min(fee - availableBalance, currentSupplied());
+        if (redeemable > 0) {
+          _redeem(redeemable);
+        }
+      }
       fee = Math.min(fee, IERC20(_underlying).balanceOf(address(this)));
+      if (fee == 0) {
+        return;
+      }
       uint256 balanceIncrease = fee * feeDenominator() / totalFeeNumerator();
       _notifyProfitInRewardToken(_underlying, balanceIncrease);
       setUint256(_PENDING_FEE_SLOT, pendingFee() - fee);

@@ -92,16 +92,38 @@ contract MorphoMarketStrategy is BaseUpgradeableStrategy {
   }
 
   function feeFloor() public view virtual returns (uint256) {
-    return 1e4;
+    return 1e3;
   }
 
   function _handleFee() internal {
     _accrueFee();
     uint256 fee = pendingFee();
     if (fee > feeFloor()) {
-      _redeem(fee);
       address _underlying = underlying();
+      uint256 availableBalance = IERC20(_underlying).balanceOf(address(this));
+      if (availableBalance < fee) {
+        Market memory m = IMorpho(morphoMorpho).market(marketId());
+        // The market can only hand back loan tokens that are not currently borrowed, and this
+        // strategy can only take out its own supply position. Redeeming more than either would
+        // revert, and a rounding-sized fee must never be able to block `doHardWork()`.
+        uint256 marketLiquidity = m.totalSupplyAssets > m.totalBorrowAssets
+          ? uint256(m.totalSupplyAssets).sub(uint256(m.totalBorrowAssets))
+          : 0;
+        uint256 redeemable = Math.min(
+          Math.min(
+            fee.sub(availableBalance),
+            currentSupplied()
+          ),
+          marketLiquidity
+        );
+        if (redeemable > 0) {
+          _redeem(redeemable);
+        }
+      }
       fee = Math.min(fee, IERC20(_underlying).balanceOf(address(this)));
+      if (fee == 0) {
+        return;
+      }
       uint256 balanceIncrease = fee.mul(feeDenominator()).div(totalFeeNumerator());
       _notifyProfitInRewardToken(_underlying, balanceIncrease);
       setUint256(_PENDING_FEE_SLOT, pendingFee().sub(fee));

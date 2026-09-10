@@ -244,7 +244,7 @@ contract Aave2AssetFoldStrategy_debtDenom is BaseUpgradeableStrategy {
   }
 
   function feeFloor() public view virtual returns (uint256) {
-    return 0;
+    return 1e3;
   }
 
   // While folded the preferred path is to pay the fee out of fresh borrow so

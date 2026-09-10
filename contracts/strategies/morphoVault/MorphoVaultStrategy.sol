@@ -104,9 +104,21 @@ contract MorphoVaultStrategy is BaseUpgradeableStrategy {
     _accrueFee();
     uint256 fee = pendingFee();
     if (fee > feeFloor()) {
-      _redeem(fee);
       address _underlying = underlying();
+      uint256 availableBalance = IERC20(_underlying).balanceOf(address(this));
+      if (availableBalance < fee) {
+        // Only ask the Morpho vault for the shortfall, and never for more than the position
+        // is actually worth right now. `IMorphoVault` exposes no `maxWithdraw`, so the
+        // supplied balance is the tightest safe cap available here.
+        uint256 redeemable = Math.min(fee.sub(availableBalance), currentSupplied());
+        if (redeemable > 0) {
+          _redeem(redeemable);
+        }
+      }
       fee = Math.min(fee, IERC20(_underlying).balanceOf(address(this)));
+      if (fee == 0) {
+        return;
+      }
       uint256 balanceIncrease = fee.mul(feeDenominator()).div(totalFeeNumerator());
       _notifyProfitInRewardToken(_underlying, balanceIncrease);
       setUint256(_PENDING_FEE_SLOT, pendingFee().sub(fee));

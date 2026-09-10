@@ -115,7 +115,7 @@ contract WasabiLendStrategy is BaseUpgradeableStrategy {
   }
 
   function feeFloor() public view virtual returns (uint256) {
-    return 1e6;
+    return 1e3;
   }
 
   /**
@@ -125,9 +125,25 @@ contract WasabiLendStrategy is BaseUpgradeableStrategy {
     _accrueFee();
     uint256 fee = pendingFee();
     if (fee > feeFloor()) {
-      _redeem(fee);
       address _underlying = underlying();
+      uint256 availableBalance = IERC20(_underlying).balanceOf(address(this));
+      if (availableBalance < fee) {
+        uint256 poolUnderlyingBalance = IERC20(_underlying).balanceOf(fToken());
+        uint256 redeemable = Math.min(
+          Math.min(
+            fee.sub(availableBalance),
+            IERC4626(fToken()).maxWithdraw(address(this))
+          ),
+          poolUnderlyingBalance
+        );
+        if (redeemable > 0) {
+          _redeem(redeemable);
+        }
+      }
       fee = Math.min(fee, IERC20(_underlying).balanceOf(address(this)));
+      if (fee == 0) {
+        return;
+      }
       uint256 balanceIncrease = fee.mul(feeDenominator()).div(totalFeeNumerator());
       _notifyProfitInRewardToken(_underlying, balanceIncrease);
       setUint256(_PENDING_FEE_SLOT, pendingFee().sub(fee));

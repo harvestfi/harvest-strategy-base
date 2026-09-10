@@ -112,7 +112,7 @@ contract DegenPrimeStrategy is BaseUpgradeableStrategy {
   }
 
   function feeFloor() public view virtual returns (uint256) {
-    return 1e6;
+    return 1e3;
   }
 
   /**
@@ -122,9 +122,25 @@ contract DegenPrimeStrategy is BaseUpgradeableStrategy {
     _accrueFee();
     uint256 fee = pendingFee();
     if (fee > feeFloor()) {
-      _redeem(fee);
       address _underlying = underlying();
+      uint256 availableBalance = IERC20(_underlying).balanceOf(address(this));
+      if (availableBalance < fee) {
+        address _rewardPool = rewardPool();
+        uint256 redeemable = Math.min(
+          Math.min(
+            fee.sub(availableBalance),
+            currentBalance()
+          ),
+          IERC20(_underlying).balanceOf(_rewardPool)
+        );
+        if (redeemable > 0) {
+          _redeem(redeemable);
+        }
+      }
       fee = Math.min(fee, IERC20(_underlying).balanceOf(address(this)));
+      if (fee == 0) {
+        return;
+      }
       uint256 balanceIncrease = fee.mul(feeDenominator()).div(totalFeeNumerator());
       _notifyProfitInRewardToken(_underlying, balanceIncrease);
       setUint256(_PENDING_FEE_SLOT, pendingFee().sub(fee));
@@ -158,11 +174,14 @@ contract DegenPrimeStrategy is BaseUpgradeableStrategy {
     _liquidateRewards();
     address _underlying = underlying();
     _redeemAll();
-    // No keep-back here: `_redeemAll()` above already leaves the unpayable fee inside the
-    // lending pool, so everything sitting idle belongs to the vault. Retaining it a second
-    // time would hold back twice the fee.
-    if (IERC20(_underlying).balanceOf(address(this)) > 0) {
-      IERC20(_underlying).safeTransfer(vault(), IERC20(_underlying).balanceOf(address(this)));
+    // Keep back whatever fee `_handleFee` could not pay out - it is below the dust floor,
+    // or the yield source refused the redemption. Handing it to the vault along with
+    // everything else would leave `pendingFee` with nothing behind it, and
+    // `investedUnderlyingBalance()` would then report less than zero.
+    uint256 balance = IERC20(_underlying).balanceOf(address(this));
+    uint256 fee = pendingFee();
+    if (balance > fee) {
+      IERC20(_underlying).safeTransfer(vault(), balance.sub(fee));
     }
     _updateStoredBalance();
   }

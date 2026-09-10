@@ -126,9 +126,35 @@ contract MoonwellFoldStrategyV2 is BaseUpgradeableStrategy {
     _accrueFee();
     uint256 fee = pendingFee();
     if (fee > feeFloor()) {
-      _redeem(fee);
       address _underlying = underlying();
+      uint256 availableBalance = IERC20(_underlying).balanceOf(address(this));
+      if (availableBalance < fee) {
+        address _mToken = mToken();
+        uint256 supplied = MTokenInterface(_mToken).balanceOfUnderlying(address(this));
+        uint256 borrowed = MTokenInterface(_mToken).borrowBalanceCurrent(address(this));
+        // Collateral that can be pulled out without breaching the collateral factor.
+        uint256 freeCollateral;
+        if (borrowed == 0) {
+          freeCollateral = supplied;
+        } else {
+          uint256 requiredCollateral = borrowed.mul(uint(1000)).div(collateralFactorNumerator());
+          freeCollateral = supplied > requiredCollateral ? supplied.sub(requiredCollateral) : 0;
+        }
+        uint256 redeemable = Math.min(
+          Math.min(
+            fee.sub(availableBalance),
+            freeCollateral
+          ),
+          MTokenInterface(_mToken).getCash()
+        );
+        if (redeemable > 0) {
+          _redeem(redeemable);
+        }
+      }
       fee = Math.min(fee, IERC20(_underlying).balanceOf(address(this)));
+      if (fee == 0) {
+        return;
+      }
       uint256 balanceIncrease = fee.mul(feeDenominator()).div(totalFeeNumerator());
       _notifyProfitInRewardToken(_underlying, balanceIncrease);
       setUint256(_PENDING_FEE_SLOT, pendingFee().sub(fee));

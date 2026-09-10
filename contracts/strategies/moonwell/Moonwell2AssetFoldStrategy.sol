@@ -182,16 +182,35 @@ contract Moonwell2AssetFoldStrategy is BaseUpgradeableStrategy {
   }
 
   function feeFloor() public view virtual returns (uint256) {
-    return 1e13;
+    return 1e3;
   }
 
   function _handleFee() internal {
     _accrueFee();
     uint256 fee = pendingFee();
     if (fee > feeFloor()) {
-      _redeem(fee);
       address _underlying = underlying();
+      uint256 availableBalance = IERC20(_underlying).balanceOf(address(this));
+      if (availableBalance < fee) {
+        address _supplyMToken = supplyMToken();
+        // Only ever ask the market for the shortfall, and never for more than the market can
+        // pay out right now or more collateral than this strategy actually has supplied.
+        uint256 redeemable = Math.min(
+          Math.min(
+            fee - availableBalance,
+            MTokenInterface(_supplyMToken).getCash()
+          ),
+          MTokenInterface(_supplyMToken).balanceOfUnderlying(address(this))
+        );
+        if (redeemable > 0) {
+          _redeem(redeemable);
+        }
+      }
       fee = Math.min(fee, IERC20(_underlying).balanceOf(address(this)));
+      if (fee == 0) {
+        // Nothing could be realised: leave it pending and retry on the next hard work.
+        return;
+      }
       uint256 balanceIncrease = (fee * feeDenominator()) / totalFeeNumerator();
       _notifyProfitInRewardToken(_underlying, balanceIncrease);
       setUint256(_PENDING_FEE_SLOT, pendingFee() - fee);

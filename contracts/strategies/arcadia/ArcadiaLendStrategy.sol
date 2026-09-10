@@ -116,7 +116,7 @@ contract ArcadiaLendStrategy is BaseUpgradeableStrategy {
   }
 
   function feeFloor() public view virtual returns (uint256) {
-    return 100;
+    return 1e3;
   }
 
   /**
@@ -126,9 +126,28 @@ contract ArcadiaLendStrategy is BaseUpgradeableStrategy {
     _accrueFee();
     uint256 fee = pendingFee();
     if (fee > feeFloor()) {
-      _redeem(fee);
       address _underlying = underlying();
+      uint256 availableBalance = IERC20(_underlying).balanceOf(address(this));
+      if (availableBalance < fee) {
+        address _fToken = fToken();
+        // The tranche holds no underlying itself - it is all in the lending pool, which is
+        // what a withdrawal actually pays out of.
+        uint256 poolUnderlyingBalance = IERC20(_underlying).balanceOf(ITranche(_fToken).LENDING_POOL());
+        uint256 redeemable = Math.min(
+          Math.min(
+            fee.sub(availableBalance),
+            IERC4626(_fToken).maxWithdraw(address(this))
+          ),
+          poolUnderlyingBalance
+        );
+        if (redeemable > 0) {
+          _redeem(redeemable);
+        }
+      }
       fee = Math.min(fee, IERC20(_underlying).balanceOf(address(this)));
+      if (fee == 0) {
+        return;
+      }
       uint256 balanceIncrease = fee.mul(feeDenominator()).div(totalFeeNumerator());
       _notifyProfitInRewardToken(_underlying, balanceIncrease);
       setUint256(_PENDING_FEE_SLOT, pendingFee().sub(fee));
