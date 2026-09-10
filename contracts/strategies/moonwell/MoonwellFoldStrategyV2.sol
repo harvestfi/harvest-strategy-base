@@ -118,10 +118,14 @@ contract MoonwellFoldStrategyV2 is BaseUpgradeableStrategy {
     _updateStoredBalance();
   }
 
+  function feeFloor() public view virtual returns (uint256) {
+    return 1e3;
+  }
+
   function _handleFee() internal {
     _accrueFee();
     uint256 fee = pendingFee();
-    if (fee > 1e3) {
+    if (fee > feeFloor()) {
       _redeem(fee);
       address _underlying = underlying();
       fee = Math.min(fee, IERC20(_underlying).balanceOf(address(this)));
@@ -161,8 +165,14 @@ contract MoonwellFoldStrategyV2 is BaseUpgradeableStrategy {
   function withdrawAllToVault() public restricted {
     address _underlying = underlying();
     _withdrawMaximum(true);
-    if (IERC20(_underlying).balanceOf(address(this)) > 0) {
-      IERC20(_underlying).safeTransfer(vault(), IERC20(_underlying).balanceOf(address(this)));
+    // Keep back whatever fee `_handleFee` could not pay out - it is below the dust floor,
+    // or the yield source refused the redemption. Handing it to the vault along with
+    // everything else would leave `pendingFee` with nothing behind it, and
+    // `investedUnderlyingBalance()` would then report less than zero.
+    uint256 balance = IERC20(_underlying).balanceOf(address(this));
+    uint256 fee = pendingFee();
+    if (balance > fee) {
+      IERC20(_underlying).safeTransfer(vault(), balance.sub(fee));
     }
     _updateStoredBalance();
   }
@@ -189,6 +199,7 @@ contract MoonwellFoldStrategyV2 is BaseUpgradeableStrategy {
     uint256 balance = IERC20(_underlying).balanceOf(address(this));
     if (amountUnderlying <= balance) {
       IERC20(_underlying).safeTransfer(vault(), amountUnderlying);
+      _updateStoredBalance();
       return;
     }
     uint256 toRedeem = amountUnderlying.sub(balance);
@@ -301,8 +312,11 @@ contract MoonwellFoldStrategyV2 is BaseUpgradeableStrategy {
   * Returns the current balance.
   */
   function investedUnderlyingBalance() public view returns (uint256) {
-    uint256 balance = IERC20(underlying()).balanceOf(address(this));
-    return balance.add(storedBalance()).sub(pendingFee());
+    uint256 total = IERC20(underlying()).balanceOf(address(this)).add(storedBalance());
+    uint256 fee = pendingFee();
+    // Clamped rather than subtracted outright: this is read by every vault entrypoint, so
+    // an underflow here would take deposits, withdrawals and the share price down with it.
+    return total > fee ? total.sub(fee) : 0;
   }
 
   /**
@@ -376,7 +390,12 @@ contract MoonwellFoldStrategyV2 is BaseUpgradeableStrategy {
     uint256 supplied = MTokenInterface(_mToken).balanceOfUnderlying(address(this));
     // amount we borrowed
     uint256 borrowed = MTokenInterface(_mToken).borrowBalanceCurrent(address(this));
-    uint256 balance = supplied.sub(borrowed).sub(pendingFee());
+    // The fee is deliberately left in the position rather than redeemed. Clamped rather
+    // than subtracted outright, so that a fee larger than what is left cannot revert the
+    // exit.
+    uint256 netBalance = supplied.sub(borrowed);
+    uint256 fee = pendingFee();
+    uint256 balance = netBalance > fee ? netBalance.sub(fee) : 0;
 
     _redeemWithFlashloan(Math.min(available, balance), 0);
     supplied = MTokenInterface(_mToken).balanceOfUnderlying(address(this));

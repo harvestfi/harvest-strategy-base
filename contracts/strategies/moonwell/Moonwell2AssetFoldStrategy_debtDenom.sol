@@ -181,10 +181,14 @@ contract Moonwell2AssetFoldStrategy_debtDenom is BaseUpgradeableStrategy {
     return s;
   }
 
+  function feeFloor() public view virtual returns (uint256) {
+    return 0;
+  }
+
   function _handleFee() internal {
     PositionSnap memory s = _accrueFee();
     uint256 fee = pendingFee();
-    if (fee <= 0) return;
+    if (fee <= feeFloor()) return;
     address _underlying = underlying();
     if (fold()) {
       if (s.health > targetHealth()){
@@ -257,8 +261,14 @@ contract Moonwell2AssetFoldStrategy_debtDenom is BaseUpgradeableStrategy {
   function withdrawAllToVault() public restricted {
     address _underlying = underlying();
     _withdrawMaximum(true);
-    if (IERC20(_underlying).balanceOf(address(this)) > 0) {
-      IERC20(_underlying).safeTransfer(vault(), IERC20(_underlying).balanceOf(address(this)) - pendingFee());
+    // Keep back whatever fee `_handleFee` could not pay out - it is below the dust floor,
+    // or the yield source refused the redemption. Handing it to the vault along with
+    // everything else would leave `pendingFee` with nothing behind it, and
+    // `investedUnderlyingBalance()` would then report less than zero.
+    uint256 balance = IERC20(_underlying).balanceOf(address(this));
+    uint256 fee = pendingFee();
+    if (balance > fee) {
+      IERC20(_underlying).safeTransfer(vault(), balance - fee);
     }
     _updateStoredBalance();
   }
@@ -286,6 +296,7 @@ contract Moonwell2AssetFoldStrategy_debtDenom is BaseUpgradeableStrategy {
     uint256 balance = IERC20(_underlying).balanceOf(address(this));
     if (amountUnderlying <= balance) {
       IERC20(_underlying).safeTransfer(vault(), amountUnderlying);
+      _updateStoredBalance();
       return;
     }
     uint256 positionBalance = _currentBalance(s);
@@ -399,7 +410,11 @@ contract Moonwell2AssetFoldStrategy_debtDenom is BaseUpgradeableStrategy {
     if (supplyBalance > 0) {
       supplyBalance = supplyBalance * MoonwellViewer(viewer).getPrice(supplyMToken(), borrowMToken()) / 1e18;
     }
-    return balance + supplyBalance + storedBalance() - pendingFee();
+    uint256 total = balance + supplyBalance + storedBalance();
+    uint256 fee = pendingFee();
+    // Clamped rather than subtracted outright: this is read by every vault entrypoint, so
+    // an underflow here would take deposits, withdrawals and the share price down with it.
+    return total > fee ? total - fee : 0;
   }
 
   /**
@@ -468,7 +483,12 @@ contract Moonwell2AssetFoldStrategy_debtDenom is BaseUpgradeableStrategy {
     uint256 availableColl = MTokenInterface(supplyMToken()).getCash();
     uint256 availableDebt = availableColl * s.priceSupplyInBorrow / 1e18;
 
-    uint256 balDebt = _currentBalance(s) - pendingFee();
+    // The fee is deliberately left in the position rather than redeemed. Clamped rather
+    // than subtracted outright, so that a fee larger than what is left cannot revert the
+    // exit.
+    uint256 netDebt = _currentBalance(s);
+    uint256 feeDebt = pendingFee();
+    uint256 balDebt = netDebt > feeDebt ? netDebt - feeDebt : 0;
     uint256 maxDebtOut = Math.min(availableDebt, balDebt);
 
     _redeemWithFlashloan(maxDebtOut, 0, s);

@@ -77,10 +77,14 @@ contract AaveSupplyStrategy is BaseUpgradeableStrategy {
     _updateStoredSupplied();
   }
 
+  function feeFloor() public view virtual returns (uint256) {
+    return 1e2;
+  }
+
   function _handleFee() internal {
     _accrueFee();
     uint256 fee = pendingFee();
-    if (fee > 1e2) {
+    if (fee > feeFloor()) {
       _redeem(fee);
       address _underlying = underlying();
       fee = Math.min(fee, IERC20(_underlying).balanceOf(address(this)));
@@ -106,8 +110,14 @@ contract AaveSupplyStrategy is BaseUpgradeableStrategy {
     address _underlying = underlying();
     _handleFee();
     _redeemMaximum();
-    if (IERC20(_underlying).balanceOf(address(this)) > 0) {
-      IERC20(_underlying).safeTransfer(vault(), IERC20(_underlying).balanceOf(address(this)));
+    // Keep back whatever fee `_handleFee` could not pay out - it is below the dust floor,
+    // or the yield source refused the redemption. Handing it to the vault along with
+    // everything else would leave `pendingFee` with nothing behind it, and
+    // `investedUnderlyingBalance()` would then report less than zero.
+    uint256 balance = IERC20(_underlying).balanceOf(address(this));
+    uint256 fee = pendingFee();
+    if (balance > fee) {
+      IERC20(_underlying).safeTransfer(vault(), balance.sub(fee));
     }
     _updateStoredSupplied();
   }
@@ -124,6 +134,7 @@ contract AaveSupplyStrategy is BaseUpgradeableStrategy {
     uint256 balance = IERC20(_underlying).balanceOf(address(this));
     if (amountUnderlying <= balance) {
       IERC20(_underlying).safeTransfer(vault(), amountUnderlying);
+      _updateStoredSupplied();
       return;
     }
     uint256 toRedeem = amountUnderlying.sub(balance);
@@ -161,9 +172,11 @@ contract AaveSupplyStrategy is BaseUpgradeableStrategy {
   */
   function investedUnderlyingBalance() public view returns (uint256) {
     // underlying in this strategy + underlying redeemable from Radiant - debt
-    return IERC20(underlying()).balanceOf(address(this))
-    .add(storedSupplied())
-    .sub(pendingFee());
+    uint256 total = IERC20(underlying()).balanceOf(address(this)).add(storedSupplied());
+    uint256 fee = pendingFee();
+    // Clamped rather than subtracted outright: this is read by every vault entrypoint, so
+    // an underflow here would take deposits, withdrawals and the share price down with it.
+    return total > fee ? total.sub(fee) : 0;
   }
 
   /**
@@ -189,8 +202,14 @@ contract AaveSupplyStrategy is BaseUpgradeableStrategy {
   }
 
   function _redeemMaximum() internal {
-    if (currentSupplied() > 0) {
-      _redeem(currentSupplied().sub(pendingFee().add(1)));
+    // The fee is deliberately left in the position rather than redeemed. Clamped rather
+    // than subtracted outright, so that a fee larger than what is left cannot revert the
+    // exit. The `+1` is the rounding margin that keeps the redemption from
+    // asking for more than the position can cover.
+    uint256 supplied = currentSupplied();
+    uint256 fee = pendingFee().add(1);
+    if (supplied > fee) {
+      _redeem(supplied.sub(fee));
     }
   }
 

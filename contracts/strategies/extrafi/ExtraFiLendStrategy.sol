@@ -123,13 +123,17 @@ contract ExtraFiLendStrategy is BaseUpgradeableStrategy {
     setUint256(_PENDING_FEE_SLOT, pendingFee().add(fee));
   }
 
+  function feeFloor() public view virtual returns (uint256) {
+    return 1e3;
+  }
+
   /**
    * @notice Handles and processes the pending fees.
    */
   function _handleFee() internal {
     _accrueFee();
     uint256 fee = pendingFee();
-    if (fee > 1e3) {
+    if (fee > feeFloor()) {
       uint256 balanceIncrease = fee.mul(feeDenominator()).div(totalFeeNumerator());
       _redeem(fee);
       address _underlying = underlying();
@@ -171,6 +175,10 @@ contract ExtraFiLendStrategy is BaseUpgradeableStrategy {
     _liquidateRewards();
     address _underlying = underlying();
     _redeemAll();
+    // No keep-back here: this strategy never nets `pendingFee` out of
+    // `investedUnderlyingBalance()`, and `_handleFee` zeroes the slot rather than
+    // decrementing it, so there is no shortfall to protect against and holding the fee
+    // back would only strand value the accounting says belongs to the vault.
     if (IERC20(_underlying).balanceOf(address(this)) > 0) {
       IERC20(_underlying).safeTransfer(vault(), IERC20(_underlying).balanceOf(address(this)));
     }
@@ -206,6 +214,7 @@ contract ExtraFiLendStrategy is BaseUpgradeableStrategy {
     uint256 balance = IERC20(_underlying).balanceOf(address(this));
     if (amountUnderlying <= balance) {
       IERC20(_underlying).safeTransfer(vault(), amountUnderlying);
+      _updateStoredBalance();
       return;
     }
     uint256 toRedeem = amountUnderlying.sub(balance);

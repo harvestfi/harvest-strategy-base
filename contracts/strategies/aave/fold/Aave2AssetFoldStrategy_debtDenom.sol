@@ -243,6 +243,10 @@ contract Aave2AssetFoldStrategy_debtDenom is BaseUpgradeableStrategy {
     return s;
   }
 
+  function feeFloor() public view virtual returns (uint256) {
+    return 0;
+  }
+
   // While folded the preferred path is to pay the fee out of fresh borrow so
   // the leveraged position is not perturbed. If the borrow market cannot accept
   // new debt (frozen / paused / capped / no headroom) or there is no
@@ -253,7 +257,7 @@ contract Aave2AssetFoldStrategy_debtDenom is BaseUpgradeableStrategy {
   function _handleFee() internal {
     PositionSnap memory s = _accrueFee();
     uint256 fee = pendingFee();
-    if (fee == 0) return;
+    if (fee <= feeFloor()) return;
     uint256 cl = _effectiveCollateralFactorNumerator();
     if (fold() && (_borrowFlags() & 1) != 0
         && AaveReserveLib.borrowCapHeadroom(IPool(rewardPool()), underlying(), borrowAToken()) >= fee
@@ -408,6 +412,7 @@ contract Aave2AssetFoldStrategy_debtDenom is BaseUpgradeableStrategy {
     uint256 balance = IERC20(_underlying).balanceOf(address(this));
     if (amountUnderlying <= balance) {
       IERC20(_underlying).safeTransfer(vault(), amountUnderlying);
+      _updateStoredBalance();
       return;
     }
     uint256 positionBalance = _currentBalance(s);
@@ -477,7 +482,11 @@ contract Aave2AssetFoldStrategy_debtDenom is BaseUpgradeableStrategy {
       (uint256 priceSupplyInBorrow,) = _prices();
       supplyBalance = (supplyBalance * priceSupplyInBorrow) / 1e18;
     }
-    return balance + supplyBalance + storedBalance() - pendingFee();
+    uint256 total = balance + supplyBalance + storedBalance();
+    uint256 fee = pendingFee();
+    // Clamped rather than subtracted outright: this is read by every vault entrypoint, so
+    // an underflow here would take deposits, withdrawals and the share price down with it.
+    return total > fee ? total - fee : 0;
   }
 
   /**
@@ -549,7 +558,12 @@ contract Aave2AssetFoldStrategy_debtDenom is BaseUpgradeableStrategy {
       return;
     }
 
-    uint256 balDebt = _currentBalance(s) - pendingFee();
+    // The fee is deliberately left in the position rather than redeemed. Clamped rather
+    // than subtracted outright, so that a fee larger than what is left cannot revert the
+    // exit.
+    uint256 netDebt = _currentBalance(s);
+    uint256 feeDebt = pendingFee();
+    uint256 balDebt = netDebt > feeDebt ? netDebt - feeDebt : 0;
     _redeemWithFlashloan(balDebt, 0, s);
     // Debt is now fully repaid; mop up any leftover (now unencumbered) collateral.
     uint256 maxOut = Math.min(
