@@ -91,13 +91,39 @@ contract MorphoMarketStrategy is BaseUpgradeableStrategy {
     setUint256(_PENDING_FEE_SLOT, pendingFee().add(fee));
   }
 
+  function feeFloor() public view virtual returns (uint256) {
+    return 1e3;
+  }
+
   function _handleFee() internal {
     _accrueFee();
     uint256 fee = pendingFee();
-    if (fee > 1e4) {
-      _redeem(fee);
+    if (fee > feeFloor()) {
       address _underlying = underlying();
+      uint256 availableBalance = IERC20(_underlying).balanceOf(address(this));
+      if (availableBalance < fee) {
+        Market memory m = IMorpho(morphoMorpho).market(marketId());
+        // The market can only hand back loan tokens that are not currently borrowed, and this
+        // strategy can only take out its own supply position. Redeeming more than either would
+        // revert, and a rounding-sized fee must never be able to block `doHardWork()`.
+        uint256 marketLiquidity = m.totalSupplyAssets > m.totalBorrowAssets
+          ? uint256(m.totalSupplyAssets).sub(uint256(m.totalBorrowAssets))
+          : 0;
+        uint256 redeemable = Math.min(
+          Math.min(
+            fee.sub(availableBalance),
+            currentSupplied()
+          ),
+          marketLiquidity
+        );
+        if (redeemable > 0) {
+          _redeem(redeemable);
+        }
+      }
       fee = Math.min(fee, IERC20(_underlying).balanceOf(address(this)));
+      if (fee == 0) {
+        return;
+      }
       uint256 balanceIncrease = fee.mul(feeDenominator()).div(totalFeeNumerator());
       _notifyProfitInRewardToken(_underlying, balanceIncrease);
       setUint256(_PENDING_FEE_SLOT, pendingFee().sub(fee));
@@ -121,8 +147,14 @@ contract MorphoMarketStrategy is BaseUpgradeableStrategy {
     _handleFee();
     _liquidateRewards();
     _redeemMaximum();
-    if (IERC20(_underlying).balanceOf(address(this)) > 0) {
-      IERC20(_underlying).safeTransfer(vault(), IERC20(_underlying).balanceOf(address(this)));
+    // Keep back whatever fee `_handleFee` could not pay out - it is below the dust floor,
+    // or the yield source refused the redemption. Handing it to the vault along with
+    // everything else would leave `pendingFee` with nothing behind it, and
+    // `investedUnderlyingBalance()` would then report less than zero.
+    uint256 balance = IERC20(_underlying).balanceOf(address(this));
+    uint256 fee = pendingFee();
+    if (balance > fee) {
+      IERC20(_underlying).safeTransfer(vault(), balance.sub(fee));
     }
     _updateStoredSupplied();
   }
@@ -139,6 +171,7 @@ contract MorphoMarketStrategy is BaseUpgradeableStrategy {
     uint256 balance = IERC20(_underlying).balanceOf(address(this));
     if (amountUnderlying <= balance) {
       IERC20(_underlying).safeTransfer(vault(), amountUnderlying);
+      _updateStoredSupplied();
       return;
     }
     uint256 toRedeem = amountUnderlying.sub(balance);
@@ -238,9 +271,11 @@ contract MorphoMarketStrategy is BaseUpgradeableStrategy {
   */
   function investedUnderlyingBalance() public view returns (uint256) {
     // underlying in this strategy + underlying redeemable from Radiant - debt
-    return IERC20(underlying()).balanceOf(address(this))
-    .add(storedSupplied())
-    .sub(pendingFee());
+    uint256 total = IERC20(underlying()).balanceOf(address(this)).add(storedSupplied());
+    uint256 fee = pendingFee();
+    // Clamped rather than subtracted outright: this is read by every vault entrypoint, so
+    // an underflow here would take deposits, withdrawals and the share price down with it.
+    return total > fee ? total.sub(fee) : 0;
   }
 
   /**

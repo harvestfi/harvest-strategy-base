@@ -111,16 +111,36 @@ contract DegenPrimeStrategy is BaseUpgradeableStrategy {
     setUint256(_PENDING_FEE_SLOT, pendingFee().add(fee));
   }
 
+  function feeFloor() public view virtual returns (uint256) {
+    return 1e3;
+  }
+
   /**
    * @notice Processes any pending fees, redeems the fee amount, and sends to the controller.
    */
   function _handleFee() internal {
     _accrueFee();
     uint256 fee = pendingFee();
-    if (fee > 1e6) {
-      _redeem(fee);
+    if (fee > feeFloor()) {
       address _underlying = underlying();
+      uint256 availableBalance = IERC20(_underlying).balanceOf(address(this));
+      if (availableBalance < fee) {
+        address _rewardPool = rewardPool();
+        uint256 redeemable = Math.min(
+          Math.min(
+            fee.sub(availableBalance),
+            currentBalance()
+          ),
+          IERC20(_underlying).balanceOf(_rewardPool)
+        );
+        if (redeemable > 0) {
+          _redeem(redeemable);
+        }
+      }
       fee = Math.min(fee, IERC20(_underlying).balanceOf(address(this)));
+      if (fee == 0) {
+        return;
+      }
       uint256 balanceIncrease = fee.mul(feeDenominator()).div(totalFeeNumerator());
       _notifyProfitInRewardToken(_underlying, balanceIncrease);
       setUint256(_PENDING_FEE_SLOT, pendingFee().sub(fee));
@@ -154,8 +174,14 @@ contract DegenPrimeStrategy is BaseUpgradeableStrategy {
     _liquidateRewards();
     address _underlying = underlying();
     _redeemAll();
-    if (IERC20(_underlying).balanceOf(address(this)) > 0) {
-      IERC20(_underlying).safeTransfer(vault(), IERC20(_underlying).balanceOf(address(this)));
+    // Keep back whatever fee `_handleFee` could not pay out - it is below the dust floor,
+    // or the yield source refused the redemption. Handing it to the vault along with
+    // everything else would leave `pendingFee` with nothing behind it, and
+    // `investedUnderlyingBalance()` would then report less than zero.
+    uint256 balance = IERC20(_underlying).balanceOf(address(this));
+    uint256 fee = pendingFee();
+    if (balance > fee) {
+      IERC20(_underlying).safeTransfer(vault(), balance.sub(fee));
     }
     _updateStoredBalance();
   }
@@ -189,6 +215,7 @@ contract DegenPrimeStrategy is BaseUpgradeableStrategy {
     uint256 balance = IERC20(_underlying).balanceOf(address(this));
     if (amountUnderlying <= balance) {
       IERC20(_underlying).safeTransfer(vault(), amountUnderlying);
+      _updateStoredBalance();
       return;
     }
     uint256 toRedeem = amountUnderlying.sub(balance);
@@ -246,9 +273,11 @@ contract DegenPrimeStrategy is BaseUpgradeableStrategy {
    * @return Total balance of underlying assets.
    */
   function investedUnderlyingBalance() public view returns (uint256) {
-    return IERC20(underlying()).balanceOf(address(this))
-    .add(storedBalance())
-    .sub(pendingFee());
+    uint256 total = IERC20(underlying()).balanceOf(address(this)).add(storedBalance());
+    uint256 fee = pendingFee();
+    // Clamped rather than subtracted outright: this is read by every vault entrypoint, so
+    // an underflow here would take deposits, withdrawals and the share price down with it.
+    return total > fee ? total.sub(fee) : 0;
   }
 
   /**
@@ -277,10 +306,13 @@ contract DegenPrimeStrategy is BaseUpgradeableStrategy {
    */
   function _redeemAll() internal {
     address _rewardPool = rewardPool();
-    if (IERC20(_rewardPool).balanceOf(address(this)) > 0) {
-      IPrimePool(_rewardPool).instantWithdraw(
-        IERC20(_rewardPool).balanceOf(address(this)).sub(pendingFee())
-      );
+    // The fee is deliberately left in the position rather than redeemed. Clamped rather
+    // than subtracted outright, so that a fee larger than what is left cannot revert the
+    // exit.
+    uint256 supplied = IERC20(_rewardPool).balanceOf(address(this));
+    uint256 fee = pendingFee();
+    if (supplied > fee) {
+      IPrimePool(_rewardPool).instantWithdraw(supplied.sub(fee));
     }
   }
 

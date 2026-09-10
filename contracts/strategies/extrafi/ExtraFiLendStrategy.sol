@@ -123,21 +123,55 @@ contract ExtraFiLendStrategy is BaseUpgradeableStrategy {
     setUint256(_PENDING_FEE_SLOT, pendingFee().add(fee));
   }
 
+  function feeFloor() public view virtual returns (uint256) {
+    return 1e3;
+  }
+
   /**
    * @notice Handles and processes the pending fees.
    */
   function _handleFee() internal {
     _accrueFee();
     uint256 fee = pendingFee();
-    if (fee > 1e3) {
-      uint256 balanceIncrease = fee.mul(feeDenominator()).div(totalFeeNumerator());
-      _redeem(fee);
+    if (fee > feeFloor()) {
       address _underlying = underlying();
-      if (IERC20(_underlying).balanceOf(address(this)) < fee) {
-        balanceIncrease = IERC20(_underlying).balanceOf(address(this)).mul(feeDenominator()).div(totalFeeNumerator());
+      uint256 availableBalance = IERC20(_underlying).balanceOf(address(this));
+      if (availableBalance < fee) {
+        address _market = market();
+        uint256 _reserveId = reserveId();
+        uint256 totalLiquidity = ILendingPool(_market).totalLiquidityOfReserve(_reserveId);
+        uint256 totalBorrows = ILendingPool(_market).totalBorrowsOfReserve(_reserveId);
+        // What the reserve can actually pay out right now: its unborrowed liquidity, further
+        // capped by this strategy's own supplied position (zero after `emergencyExit`).
+        uint256 reserveLiquidity = totalLiquidity > totalBorrows ? totalLiquidity.sub(totalBorrows) : 0;
+        uint256 redeemable = Math.min(
+          Math.min(
+            fee.sub(availableBalance),
+            currentBalance()
+          ),
+          reserveLiquidity
+        );
+        // `_redeem` converts to eTokens rounding UP, so asking for exactly the reserve's
+        // cash - or exactly this position - overshoots by a wei or two and reverts, which
+        // is the very case this cap exists to survive. Give up a couple of wei of fee.
+        uint256 roundingMargin = ILendingPool(_market).exchangeRateOfReserve(_reserveId).div(1e18).add(2);
+        redeemable = redeemable > roundingMargin ? redeemable.sub(roundingMargin) : 0;
+        if (redeemable > 0) {
+          _redeem(redeemable);
+        }
       }
+      fee = Math.min(fee, IERC20(_underlying).balanceOf(address(this)));
+      if (fee == 0) {
+        // Nothing could be realised: leave the fee pending and retry on the next hard work
+        // rather than reverting and taking `doHardWork` (and user withdrawals) down with it.
+        _updateStoredBalance();
+        return;
+      }
+      uint256 balanceIncrease = fee.mul(feeDenominator()).div(totalFeeNumerator());
       _notifyProfitInRewardToken(_underlying, balanceIncrease);
-      setUint256(_PENDING_FEE_SLOT, 0);
+      // Decremented by what was actually paid, not zeroed: zeroing forgave any part of the
+      // fee the pool could not service, and the strategy never collected it.
+      setUint256(_PENDING_FEE_SLOT, pendingFee().sub(fee));
     }
     _updateStoredBalance();
   }
@@ -171,8 +205,14 @@ contract ExtraFiLendStrategy is BaseUpgradeableStrategy {
     _liquidateRewards();
     address _underlying = underlying();
     _redeemAll();
-    if (IERC20(_underlying).balanceOf(address(this)) > 0) {
-      IERC20(_underlying).safeTransfer(vault(), IERC20(_underlying).balanceOf(address(this)));
+    // Keep back whatever fee `_handleFee` could not pay out - it is below the dust floor,
+    // or the yield source refused the redemption. Handing it to the vault along with
+    // everything else would leave `pendingFee` with nothing behind it, and
+    // `investedUnderlyingBalance()` would then report less than zero.
+    uint256 balance = IERC20(_underlying).balanceOf(address(this));
+    uint256 fee = pendingFee();
+    if (balance > fee) {
+      IERC20(_underlying).safeTransfer(vault(), balance.sub(fee));
     }
     _updateStoredBalance();
   }
@@ -206,6 +246,7 @@ contract ExtraFiLendStrategy is BaseUpgradeableStrategy {
     uint256 balance = IERC20(_underlying).balanceOf(address(this));
     if (amountUnderlying <= balance) {
       IERC20(_underlying).safeTransfer(vault(), amountUnderlying);
+      _updateStoredBalance();
       return;
     }
     uint256 toRedeem = amountUnderlying.sub(balance);
@@ -298,8 +339,11 @@ contract ExtraFiLendStrategy is BaseUpgradeableStrategy {
    * @notice Returns the total invested underlying balance.
    */
   function investedUnderlyingBalance() public view returns (uint256) {
-    return IERC20(underlying()).balanceOf(address(this))
-    .add(storedBalance());
+    uint256 total = IERC20(underlying()).balanceOf(address(this)).add(storedBalance());
+    uint256 fee = pendingFee();
+    // Clamped rather than subtracted outright: this is read by every vault entrypoint, so
+    // an underflow here would take deposits, withdrawals and the share price down with it.
+    return total > fee ? total.sub(fee) : 0;
   }
 
   /**
