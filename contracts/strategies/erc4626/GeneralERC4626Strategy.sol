@@ -26,6 +26,7 @@ contract GeneralERC4626Strategy is BaseUpgradeableStrategy, IHardWorkHooks {
   bytes32 internal constant _FTOKEN_SLOT = 0x462e4d44c9bae3e0ee3d71929710bef82ca7c929ce31980e75572ea415835b0e;
   bytes32 internal constant _STORED_SUPPLIED_SLOT = 0x280539da846b4989609abdccfea039bd1453e4f710c670b29b9eeaca0730c1a2;
   bytes32 internal constant _PENDING_FEE_SLOT = 0x0af7af9f5ccfa82c3497f40c7c382677637aee27293a6243a22216b51481bd97;
+  bytes32 internal constant _LOSS_CARRY_SLOT = 0x41899daaeb9cc577a761309ed45b44d3e89e0a9eaa6cd4333a3ebb5fa844d157;
 
   // this would be reset on each upgrade
   address[] public rewardTokens;
@@ -46,6 +47,7 @@ contract GeneralERC4626Strategy is BaseUpgradeableStrategy, IHardWorkHooks {
     assert(_FTOKEN_SLOT == bytes32(uint256(keccak256("eip1967.strategyStorage.fToken")) - 1));
     assert(_STORED_SUPPLIED_SLOT == bytes32(uint256(keccak256("eip1967.strategyStorage.storedSupplied")) - 1));
     assert(_PENDING_FEE_SLOT == bytes32(uint256(keccak256("eip1967.strategyStorage.pendingFee")) - 1));
+    assert(_LOSS_CARRY_SLOT == bytes32(uint256(keccak256("eip1967.strategyStorage.lossCarry")) - 1));
   }
 
   /**
@@ -83,6 +85,11 @@ contract GeneralERC4626Strategy is BaseUpgradeableStrategy, IHardWorkHooks {
    */
   function currentBalance() public view returns (uint256) {
     address _fToken = fToken();
+    // Marked GROSS, with `convertToAssets`. Any exit fee the yield source charges is
+    // deliberately left out of the share price and is instead borne by the user whose
+    // withdrawal actually triggers a redemption - see `_redeem`. A withdrawal the vault
+    // can serve from idle triggers none and pays none; that fee stays latent in the
+    // position until someone does redeem.
     uint256 underlyingBalance = IERC4626(_fToken).convertToAssets(IERC20(_fToken).balanceOf(address(this)));
     return underlyingBalance;
   }
@@ -120,15 +127,64 @@ contract GeneralERC4626Strategy is BaseUpgradeableStrategy, IHardWorkHooks {
   }
 
   /**
-   * @notice Accrues fees based on the increase in balance.
+   * @notice Value the position has lost and not yet earned back. No performance fee is
+   * charged until it has.
+   * @return The unrecovered loss, in underlying.
+   */
+  function lossCarry() public view returns (uint256) {
+    return getUint256(_LOSS_CARRY_SLOT);
+  }
+
+  /**
+   * @notice Accrues the performance fee on the gain since the last call, above the high
+   * water mark.
+   * @dev `storedBalance` cannot itself be the high water mark: it has to track the real
+   * size of the position, which supplying and redeeming legitimately move. So a drop in
+   * value is remembered separately in `lossCarry` and offsets later gains, and only what
+   * is left is charged.
+   *
+   * Every caller runs this BEFORE it supplies or redeems in the same transaction, and
+   * `_updateStoredBalance()` runs after, so the difference measured here is always a pure
+   * change in value and never the strategy's own deposits or withdrawals.
+   *
+   * Without this, a dip resets the mark and depositors are charged the full fee for
+   * earning their own loss back. These are actively managed vaults whose NAV does fall -
+   * on a management-fee share mint, a rebalance, or a market-balance refresh - so over a
+   * saw-toothing period the fee taken would otherwise run well past the intended share of
+   * true net profit.
    */
   function _accrueFee() internal {
-    uint256 fee;
-    if (currentBalance() > storedBalance()) {
-      uint256 balanceIncrease = currentBalance().sub(storedBalance());
-      fee = balanceIncrease.mul(totalFeeNumerator()).div(feeDenominator());
+    uint256 balance = currentBalance();
+    uint256 stored = storedBalance();
+
+    if (balance < stored) {
+      setUint256(_LOSS_CARRY_SLOT, lossCarry().add(stored.sub(balance)));
+      return;
     }
-    setUint256(_PENDING_FEE_SLOT, pendingFee().add(fee));
+    if (balance == stored) {
+      return;
+    }
+
+    uint256 gain = balance.sub(stored);
+    uint256 carry = lossCarry();
+    if (carry > 0) {
+      uint256 recovered = Math.min(carry, gain);
+      setUint256(_LOSS_CARRY_SLOT, carry.sub(recovered));
+      gain = gain.sub(recovered);
+    }
+    if (gain > 0) {
+      setUint256(_PENDING_FEE_SLOT, pendingFee().add(gain.mul(totalFeeNumerator()).div(feeDenominator())));
+    }
+  }
+
+  /**
+   * @notice Smallest fee worth paying out. Below this it stays pending and is retried on
+   * the next call, rather than spending gas forwarding dust.
+   * @dev Virtual so a strategy on a low-decimal underlying can lower it.
+   * @return The floor, in underlying.
+   */
+  function feeFloor() public view virtual returns (uint256) {
+    return 1e3;
   }
 
   /**
@@ -137,7 +193,7 @@ contract GeneralERC4626Strategy is BaseUpgradeableStrategy, IHardWorkHooks {
   function _handleFee() internal {
     _accrueFee();
     uint256 fee = pendingFee();
-    if (fee > 1e3) {
+    if (fee > feeFloor()) {
       address _underlying = underlying();
       uint256 availableBalance = IERC20(_underlying).balanceOf(address(this));
       if (availableBalance < fee) {
@@ -194,8 +250,14 @@ contract GeneralERC4626Strategy is BaseUpgradeableStrategy, IHardWorkHooks {
     _handleFee();
     address _underlying = underlying();
     _redeemAll();
-    if (IERC20(_underlying).balanceOf(address(this)) > 0) {
-      IERC20(_underlying).safeTransfer(vault(), IERC20(_underlying).balanceOf(address(this)));
+    // Keep back whatever fee `_handleFee` could not pay out - it is below the dust floor,
+    // or the yield source refused the redemption. Handing it to the vault along with
+    // everything else would leave `pendingFee` with nothing behind it, and
+    // `investedUnderlyingBalance()` would then report less than zero.
+    uint256 balance = IERC20(_underlying).balanceOf(address(this));
+    uint256 fee = pendingFee();
+    if (balance > fee) {
+      IERC20(_underlying).safeTransfer(vault(), balance.sub(fee));
     }
     _updateStoredBalance();
   }
@@ -447,9 +509,11 @@ contract GeneralERC4626Strategy is BaseUpgradeableStrategy, IHardWorkHooks {
    * @return Total balance of underlying assets.
    */
   function investedUnderlyingBalance() public view returns (uint256) {
-    return IERC20(underlying()).balanceOf(address(this))
-    .add(storedBalance())
-    .sub(pendingFee());
+    uint256 total = IERC20(underlying()).balanceOf(address(this)).add(storedBalance());
+    uint256 fee = pendingFee();
+    // Clamped rather than subtracted outright: this is read by every vault entrypoint, so
+    // an underflow here would take deposits, withdrawals and the share price down with it.
+    return total > fee ? total.sub(fee) : 0;
   }
 
   /**
@@ -470,15 +534,16 @@ contract GeneralERC4626Strategy is BaseUpgradeableStrategy, IHardWorkHooks {
    */
   function _redeem(uint256 amountUnderlying) internal {
     address _fToken = fToken();
-    // Redeem by SHARES, not by assets. `withdraw(assets)` delivers exactly
-    // `amountUnderlying` and takes any vault withdraw fee as extra shares on top, so the
-    // position drops by more than the strategy hands to the vault; VaultV1._withdraw then
-    // prices the exit off the reduced total and the withdrawer bears only a pro-rata slice
-    // of the fee, with the rest landing on every other holder. Burning exactly the shares
-    // worth `amountUnderlying` makes the fee come out of the delivered assets instead: the
-    // position drops by precisely what was asked, and the vault's `min(entitlement, idle)`
-    // charges the whole fee to the user withdrawing. On a fee-free vault the two differ
-    // only by rounding.
+    // Burn the shares worth `amountUnderlying` and take whatever the yield source pays for
+    // them. With the position marked gross, that delivers `amountUnderlying` less the exit
+    // fee, and `VaultV1._withdraw` hands the withdrawing user `min(entitlement, idle)` -
+    // so the shortfall is exactly the fee and it lands on them alone.
+    //
+    // NOT `withdraw(assets)`, which delivers the full amount and burns the fee as EXTRA
+    // shares on top: the position would fall by more than was paid out, the vault would
+    // reprice the exit off the reduced total, and the fee would spread over every holder.
+    // And not `previewWithdraw` either - grossing up would deliver the full entitlement
+    // and push the fee onto the holders who stay.
     uint256 shares = Math.min(
       IERC4626(_fToken).convertToShares(amountUnderlying),
       IERC20(_fToken).balanceOf(address(this))
