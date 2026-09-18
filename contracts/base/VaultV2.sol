@@ -26,7 +26,7 @@ contract VaultV2 is IERC4626, VaultV1 {
      * @notice Returns the total assets managed by the vault, including invested assets.
      * @return Total assets in the vault.
      */
-    function totalAssets() public view override returns (uint256) {
+    function totalAssets() public view virtual override returns (uint256) {
         return underlyingBalanceWithInvestment();
     }
 
