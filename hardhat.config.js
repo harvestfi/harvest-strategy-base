@@ -106,17 +106,24 @@ module.exports = {
       // runs:1 the IR pipeline inflates its bytecode past the 24576-byte EIP-170
       // limit (~25.8KB), while the legacy pipeline keeps it comfortably under.
       // Override the whole fold compilation unit so it builds consistently.
+      // Cancun (live on Base since Ecotone) for the transient Morpho flash flag
+      // (TSTORE/TLOAD); it also brings PUSH0, which shrinks the bytecode.
       "contracts/strategies/aave/fold/Aave2AssetFoldStrategyMainnet_ETH_cbETH.sol": {
         version: "0.8.26",
-        settings: { optimizer: { enabled: true, runs: 1 }, viaIR: false },
+        settings: { optimizer: { enabled: true, runs: 1 }, viaIR: false, evmVersion: "cancun" },
       },
       "contracts/strategies/aave/fold/Aave2AssetFoldStrategy_debtDenom.sol": {
         version: "0.8.26",
-        settings: { optimizer: { enabled: true, runs: 1 }, viaIR: false },
+        settings: { optimizer: { enabled: true, runs: 1 }, viaIR: false, evmVersion: "cancun" },
       },
       "contracts/strategies/aave/fold/AaveReserveLib.sol": {
         version: "0.8.26",
-        settings: { optimizer: { enabled: true, runs: 1 }, viaIR: false },
+        settings: { optimizer: { enabled: true, runs: 1 }, viaIR: false, evmVersion: "cancun" },
+      },
+      // Test wrapper that imports AaveReserveLib (its TSTORE needs Cancun).
+      "contracts/test/AaveReserveLibTester.sol": {
+        version: "0.8.26",
+        settings: { optimizer: { enabled: true, runs: 1 }, viaIR: false, evmVersion: "cancun" },
       },
       "contracts/strategies/aave/fold/AaveViewer.sol": {
         version: "0.8.26",

@@ -24,7 +24,6 @@ const BLOCK = 52890976;
 const VAULT = "0xE78285A51f51916F2311B7017Db036D8351F3Cf9";
 const STRAT = "0xcfd2f32E6d533653cEd5Ba7E5fe1a76C3c626757";
 const DEPLOYED_IMPL = "0x74ae6e11a89ae6dfe3a304f7881b67a93187ed3f";
-const RESERVE_LIB = "0x2B19aB8A9b31798f2536c440B596816e2aa10033"; // deployed AaveReserveLib, unchanged
 const WETH = "0x4200000000000000000000000000000000000006";
 const CBETH = "0x2Ae3F1Ec7F1F5012CFEab0185bfc7aa3cf0DEc22";
 const AAVE_POOL = "0xA238Dd80C259a72e81d7e4664a9801593F98d1c5";
@@ -94,8 +93,12 @@ describe("Aave fold live NAV (fork)", function () {
     await send("evm_mine"); // EDR has no Base hardfork history at the fork block itself
     assert.equal(await implOf(), ethers.utils.getAddress(DEPLOYED_IMPL), "fork block runs the deployed impl");
 
+    // The premium-free flash change added AaveReserveLib.flash, so the
+    // upgrade ships with a fresh library (the deployed 0x2B19aB8A lacks it).
+    const lib = await (await ethers.getContractFactory("AaveReserveLib")).deploy();
+    await lib.deployed();
     const factory = await ethers.getContractFactory(STRATEGY_NAME, {
-      libraries: { "contracts/strategies/aave/fold/AaveReserveLib.sol:AaveReserveLib": RESERVE_LIB },
+      libraries: { "contracts/strategies/aave/fold/AaveReserveLib.sol:AaveReserveLib": lib.address },
     });
     newImpl = await factory.deploy();
     await newImpl.deployed();

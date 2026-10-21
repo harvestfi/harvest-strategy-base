@@ -615,11 +615,9 @@ contract Aave2AssetFoldStrategy_debtDenom is BaseUpgradeableStrategy {
     if (borrowTarget > s.borrowedDebt) {
       // Clamp to the reserves' remaining cap headroom: lever partway now and
       // finish on a later hard-work rather than reverting at a near-full cap.
-      uint256 desiredDebtIncrease = _capClampedDebtIncrease(borrowTarget - s.borrowedDebt, s.priceSupplyInBorrow);
-      uint256 premiumBps = IPool(rewardPool()).FLASHLOAN_PREMIUM_TOTAL();
-      uint256 borrowDiff = premiumBps == 0
-        ? desiredDebtIncrease
-        : (desiredDebtIncrease * BPS) / (BPS + premiumBps);
+      // The lever flash becomes the debt itself (premium-free), so the flashed
+      // amount IS the debt increase.
+      uint256 borrowDiff = _capClampedDebtIncrease(borrowTarget - s.borrowedDebt, s.priceSupplyInBorrow);
       if (borrowDiff > 0) {
         _flashLoan(FlashParams({mode: FlashMode.Deposit, redeemAmount: 0, collateralToRedeem: 0}), borrowDiff);
       }
@@ -644,12 +642,12 @@ contract Aave2AssetFoldStrategy_debtDenom is BaseUpgradeableStrategy {
     // The marginal deposit should reach the same target leverage as the rest of the book,
     // but only for the user-added equity realized in this interaction. Clamp to the
     // reserves' remaining cap headroom so a near-full cap can't revert the deposit.
-    uint256 debtIncrease = _capClampedDebtIncrease(
+    // The lever flash becomes the debt itself (premium-free), so the flashed
+    // amount IS the debt increase.
+    uint256 borrowDiff = _capClampedDebtIncrease(
       ((balanceAfter - balanceBefore) * _borrowNum) / (BPS - _borrowNum),
       s.priceSupplyInBorrow
     );
-    uint256 premiumBps = IPool(rewardPool()).FLASHLOAN_PREMIUM_TOTAL();
-    uint256 borrowDiff = premiumBps > 0 ? (debtIncrease * BPS) / (BPS + premiumBps) : debtIncrease;
     if (borrowDiff == 0) return;
 
     _flashLoan(FlashParams({mode: FlashMode.Deposit, redeemAmount: 0, collateralToRedeem: 0}), borrowDiff);
@@ -695,23 +693,57 @@ contract Aave2AssetFoldStrategy_debtDenom is BaseUpgradeableStrategy {
     }
   }
 
-  // Single flashloan entry point shared by every lever/delever path.
+  // Single flashloan entry point shared by every lever/delever path. Lever:
+  // Aave flashLoan in interestRateMode 2, which opens the flashed amount as
+  // variable debt with no premium. Delever: Morpho Blue (no fee), falling back
+  // to an Aave mode-0 flash when Morpho is short. See AaveReserveLib.flash.
   function _flashLoan(FlashParams memory params, uint256 amount) internal {
-    IPool(rewardPool()).flashLoanSimple(address(this), underlying(), amount, abi.encode(params), 0);
+    AaveReserveLib.flash(rewardPool(), underlying(), amount, params.mode == FlashMode.Deposit, abi.encode(params));
   }
 
-  function executeOperation(address asset, uint256 amount, uint256 premium, address initiator, bytes memory params) external nonReentrant() returns (bool) {
-    address _aavePool = rewardPool();
-    require(msg.sender == _aavePool, "!pool");
+  // Premium (bps) each flash path actually pays. Read by the vault's preview
+  // lens. The lever is always premium-free; the delever is free while Morpho
+  // can lend the whole debt, else it pays Aave's FLASHLOAN_PREMIUM_TOTAL.
+  function leverFlashPremiumBps() external pure returns (uint256) {
+    return 0;
+  }
+
+  function deleverFlashPremiumBps() external view returns (uint256) {
+    return AaveReserveLib.deleverPremiumBps(rewardPool(), underlying(), borrowAToken());
+  }
+
+  // Aave flashLoan callback: the lever (mode 2, premium 0) and the delever
+  // fallback (mode 0).
+  function executeOperation(address[] calldata assets, uint256[] calldata amounts, uint256[] calldata premiums, address initiator, bytes calldata params) external returns (bool) {
+    require(msg.sender == rewardPool(), "!pool");
     require(initiator == address(this), "!sender");
+    _onFlash(assets[0], amounts[0], premiums[0], params);
+    return true;
+  }
+
+  // Morpho Blue flashLoan callback (delever). Morpho only calls back its own
+  // flashLoan caller, and the transient flag is set only around ours.
+  function onMorphoFlashLoan(uint256 amount, bytes calldata params) external {
+    uint256 f;
+    uint256 slot = AaveReserveLib.MORPHO_FLASH_SLOT;
+    assembly { f := tload(slot) }
+    require(msg.sender == AaveReserveLib.MORPHO && f == 1, "!morpho");
+    _onFlash(underlying(), amount, 0, params);
+  }
+
+  function _onFlash(address asset, uint256 amount, uint256 premium, bytes calldata params) internal nonReentrant {
     FlashParams memory flashParams = abi.decode(params, (FlashParams));
-    uint256 toRepay = amount + premium;
     // Same tx as the initiator, so the oracle yields the same prices it used.
     (uint256 priceSupplyInBorrow, uint256 priceBorrowInSupply) = _prices();
 
     if (flashParams.mode == FlashMode.Deposit){
-      _onFlashDeposit(asset, amount, toRepay, priceSupplyInBorrow, priceBorrowInSupply);
+      // Mode 2: Aave opens the flashed amount as debt after we return, so
+      // there is nothing to borrow or repay here.
+      address _supplyAsset = supplyAsset();
+      _swap(asset, _supplyAsset, amount, priceSupplyInBorrow, priceBorrowInSupply);
+      _supply(IERC20(_supplyAsset).balanceOf(address(this)));
     } else {
+      uint256 toRepay = amount + premium;
       _onFlashWithdraw(
         asset,
         amount,
@@ -721,19 +753,10 @@ contract Aave2AssetFoldStrategy_debtDenom is BaseUpgradeableStrategy {
         priceSupplyInBorrow,
         priceBorrowInSupply
       );
+      // The lender (Aave pool or Morpho) pulls amount + premium after we return.
+      IERC20(asset).safeApprove(msg.sender, 0);
+      IERC20(asset).safeApprove(msg.sender, toRepay);
     }
-
-    IERC20(asset).safeApprove(_aavePool, 0);
-    IERC20(asset).safeApprove(_aavePool, toRepay);
-
-    return true;
-  }
-
-  function _onFlashDeposit(address asset, uint256 amount, uint256 toRepay, uint256 priceSupplyInBorrow, uint256 priceBorrowInSupply) internal {
-    address _supplyAsset = supplyAsset();
-    _swap(asset, _supplyAsset, amount, priceSupplyInBorrow, priceBorrowInSupply);
-    _supply(IERC20(_supplyAsset).balanceOf(address(this)));
-    _borrow(toRepay);
   }
 
   function _onFlashWithdraw(
