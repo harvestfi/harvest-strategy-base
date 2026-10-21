@@ -36,6 +36,7 @@ const MORPHO = "0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb";
 const POOL_CONFIGURATOR = "0x5731a04B1E775f0fdd454Bf70f3335886e9A96be";
 const POOL_ADMIN = "0x9390B1735def18560c509E2d0bc090E9d6BA257a";
 const WETH_BALANCE_SLOT = 3; // WETH9: name, symbol, decimals, balanceOf
+const PENDING_FEE_SLOT = "0x0af7af9f5ccfa82c3497f40c7c382677637aee27293a6243a22216b51481bd97";
 const IMPL_SLOT = "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc";
 const STRATEGY_NAME = "Aave2AssetFoldStrategyMainnet_ETH_cbETH";
 const LIB = "contracts/strategies/aave/fold/AaveReserveLib.sol:AaveReserveLib";
@@ -62,6 +63,9 @@ const STRAT_ABI = [
   "function executeOperation(address[],uint256[],uint256[],address,bytes) returns (bool)",
   "function onMorphoFlashLoan(uint256,bytes)",
   "function universalLiquidator() view returns (address)",
+  "function governance() view returns (address)",
+  "function emergencyExit()",
+  "function feeFloor() view returns (uint256)",
 ];
 const EVENTS = new ethers.utils.Interface([
   "event FlashLoan(address indexed target, address initiator, address indexed asset, uint256 amount, uint8 interestRateMode, uint256 premium, uint16 indexed referralCode)",
@@ -321,6 +325,23 @@ describe("Aave fold premium-free flashloans (fork)", function () {
     const pool = new ethers.Contract(AAVE_POOL, ["function flashLoan(address,address[],uint256[],uint256[],address,bytes,uint16)"], user);
     await expectRevert(pool.flashLoan(STRAT, [WETH], [one], [0], USER, params, 0, { gasLimit: 3_000_000 }), "!sender");
     await expectRevert(pool.flashLoan(STRAT, [WETH], [one], [2], STRAT, params, 0, { gasLimit: 3_000_000 }), "!sender");
+  });
+
+  it("dev's fee conventions: feeFloor 1e3, and a pendingFee above the equity no longer bricks the full unwind", async function () {
+    const debt = new ethers.Contract(DEBT, ERC20, ethers.provider);
+    const gov = await signer(await new ethers.Contract(STRAT, STRAT_ABI, ethers.provider).governance());
+    const nav = await liveNav();
+    await send("hardhat_setStorageAt", [STRAT, PENDING_FEE_SLOT, pad32(nav.mul(2).toHexString())]);
+
+    await useImpl(oldImpl);
+    let oldReason = null;
+    try { await (await strat.connect(gov).emergencyExit({ gasLimit: 8_000_000 })).wait(); } catch (e) { oldReason = e.reason || e.message; }
+    assert.isNotNull(oldReason, "deployed impl underflows on currentBalance - pendingFee");
+
+    await useImpl(newImpl.address);
+    assert.equal((await strat.feeFloor()).toString(), "1000");
+    await (await strat.connect(gov).emergencyExit({ gasLimit: 8_000_000 })).wait();
+    assert.isTrue((await debt.balanceOf(STRAT)).isZero(), "fully unwound");
   });
 
   it("a near-full WETH borrow cap clamps the mode-2 lever instead of reverting", async function () {
