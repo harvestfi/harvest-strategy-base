@@ -12,7 +12,7 @@
 // governance address with hardhat_setCode so preInteract()'s `restricted` check
 // passes; it reads totalAssets(), runs preInteract(), and reads it again.
 //
-//   FORK_BLOCK=52890976 npx hardhat test test/aave/fold/live-nav-fork.js
+//   LIVE_NAV_BLOCK=52890976 npx hardhat test test/aave/fold/live-nav-fork.js
 //
 // ethers-only on purpose: truffle's confirmation pollers are what deadlocked
 // the in-process node in the 2026-10-05 crash.
@@ -20,7 +20,7 @@
 const { assert } = require("chai");
 const { ethers } = hre;
 
-const BLOCK = 52890976;
+const BLOCK = Number(process.env.LIVE_NAV_BLOCK || 52890976);
 const VAULT = "0xE78285A51f51916F2311B7017Db036D8351F3Cf9";
 const STRAT = "0xcfd2f32E6d533653cEd5Ba7E5fe1a76C3c626757";
 const DEPLOYED_IMPL = "0x74ae6e11a89ae6dfe3a304f7881b67a93187ed3f";
