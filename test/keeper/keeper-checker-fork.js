@@ -1,6 +1,6 @@
 // KeeperChecker fork tests against live Base state.
 //
-//   FORK_BLOCK=52896000 npx hardhat test test/keeper/keeper-checker-fork.js
+//   KEEPER_FORK_BLOCK=52896000 npx hardhat test test/keeper/keeper-checker-fork.js
 //
 // Forks ONCE (one hardhat_reset in `before`), then evm_snapshot/evm_revert per test. Uses ethers
 // contracts only (no truffle), so there are no confirmation pollers.
@@ -14,7 +14,6 @@ const CONTROLLER = "0xF90FF0F7c8Db52bF1bF869F74226eAD125EFa745";
 const MSIG = "0x920b1aCb7618B553324aa0F71620226FA2e09870"; // Controller, vault and fold-strategy governance
 const OPS = "0x6a74649aCFD7822ae8Fb78463a9f2192752E5Aa2"; // CLChainlinkChecker governance
 const OLD_CL = "0xaba4ba582E04B729ABCd2Bae0d7c14fe21C9F510";
-const OLD_HW = "0x81c733905e2Fd878fda137802E7bF578E3CDfbF7";
 
 const FOLD = "0xcfd2f32E6d533653cEd5Ba7E5fe1a76C3c626757"; // Aave fold strategy, CL-checker index 7
 const FOLD_VAULT = "0xE78285A51f51916F2311B7017Db036D8351F3Cf9";
@@ -94,7 +93,7 @@ describe("KeeperChecker (Base fork)", function () {
   this.timeout(900_000);
 
   let msig, ops, keeper, stranger;
-  let controller, fold, clVault, oldCL, oldHW;
+  let controller, fold, clVault, oldCL;
   let checker, forwarder;
   let snap;
 
@@ -114,7 +113,6 @@ describe("KeeperChecker (Base fork)", function () {
     fold = new ethers.Contract(FOLD, FOLD_ABI, msig);
     clVault = new ethers.Contract(CL_W16, CL_VAULT_ABI, msig);
     oldCL = new ethers.Contract(OLD_CL, OLD_CHECKER_ABI, ops);
-    oldHW = new ethers.Contract(OLD_HW, OLD_CHECKER_ABI, msig);
 
     const KC = await ethers.getContractFactory("KeeperChecker");
     checker = await KC.connect(keeper).deploy(STORE);
@@ -200,21 +198,23 @@ describe("KeeperChecker (Base fork)", function () {
       assert(stillDue, "the CL vault is still waiting");
     });
 
-    it("ChainlinkChecker: a reverting entry ahead of the fold strategy blocks its deleverage", async () => {
-      const { badStrat } = await deployMocks();
-      const current = [];
-      for (let i = 0; i < 4; i++) current.push(await oldHW.vaults(i));
-      await (await oldHW.removeVaults(current)).wait();
-      await (await oldHW.addVaults([badStrat.address, FOLD])).wait();
+    it("CLChainlinkChecker, interim fix applied: one reverting CL entry still starves the vaults behind it", async () => {
+      // The interim fix takes the fold strategy out. A CL entry whose rebalance keeps reverting
+      // (V2 stake-ratio payload, paused vault, TWAP guard) wedges the queue the same way.
+      const MCL = await ethers.getContractFactory("MockKeeperCLVault");
+      const badCL = await MCL.deploy();
+      await (await oldCL.removeVault(FOLD)).wait();
+      await (await oldCL.removeVault(CL_W16)).wait();
+      await (await oldCL.addVaults([badCL.address, CL_W16])).wait();
 
-      const [up, data] = await oldHW.checkUpkeep("0x");
+      const [up, data] = await oldCL.checkUpkeep("0x");
       assert(up);
-      assert.strictEqual(data, (await badStrat.checker())[1], "old checker surfaces the broken entry first");
-      await expectCustomError(oldHW.connect(keeper).callStatic.performUpkeep(data), "CallFailed(bytes)");
-      // The fold payload cannot be pushed past it either: performUpkeep insists on the first eligible.
-      const foldPayload = (await fold.checker())[1];
-      await expectCustomError(oldHW.connect(keeper).callStatic.performUpkeep(foldPayload), "DataMismatch()");
-      assert((await fold.checker())[0], "fold strategy still needs its deleverage");
+      const [picked] = ethers.utils.defaultAbiCoder.decode(["address", "bytes"], data);
+      assert.strictEqual(picked, badCL.address, "old checker surfaces the broken entry first");
+      await expectCustomError(oldCL.connect(keeper).callStatic.performUpkeep(data), "CallFailed(bytes)");
+      // A hand-encoded perform for the vault would still work; a keeper that follows checkUpkeep
+      // (the bot, CRE) never gets one.
+      assert((await clVault.checker())[0], "the CL vault is still waiting");
     });
   });
 
@@ -448,17 +448,17 @@ describe("KeeperChecker (Base fork)", function () {
       await expectCustomError(checker.connect(keeper).callStatic.performUpkeep(tooMany), "TooMany(uint256)");
     });
 
-    it("migration rehearsal: every live entry of both checkers, one target, keeper loop until quiet", async () => {
-      // Register exactly what the two old checkers hold (fold strategy once, in the safety tier).
+    it("migration rehearsal: every live CLChainlinkChecker entry, one target, keeper loop until quiet", async () => {
+      // Register exactly what CLChainlinkChecker holds (the only checker in use; the hard-work
+      // ChainlinkChecker is retired): the fold strategy in the safety tier, the 20 CL vaults next.
       const cl = [];
       for (let i = 0; i < 21; i++) cl.push(await oldCL.vaults(i));
-      const hw = [];
-      for (let i = 0; i < 4; i++) hw.push(await oldHW.vaults(i));
-      const folds = [FOLD, "0xa2c8A60b0ac47e5b61250A7e1b17894a2948cffC", "0x7deC7048D9bB44B5bD0250186ce24371cEd34Fe4"];
+      let more = true;
+      try { await oldCL.vaults(21); } catch (e) { more = false; }
+      assert(!more, "CLChainlinkChecker holds more than 21 entries - update the rehearsal");
+      const folds = [FOLD];
       const clVaults = cl.filter((a) => a !== FOLD);
-      const harvests = hw.filter((a) => !folds.includes(a));
       assert.strictEqual(clVaults.length, 20);
-      assert.strictEqual(harvests.length, 2);
 
       // Runbook step 1 + 2: hardWorker, then re-point every CL vault, preserving deviation/cooldown.
       await (await controller.addHardWorker(checker.address)).wait();
@@ -470,19 +470,19 @@ describe("KeeperChecker (Base fork)", function () {
         assert.strictEqual(ethers.utils.getAddress("0x" + (await ethers.provider.getStorageAt(v, SLOT_EXECUTOR)).slice(26)), checker.address);
       }
       // Runbook step 3.
-      const targets = [...folds, ...clVaults, ...harvests];
-      const kinds = [...folds.map(() => KIND.HARD_WORK), ...clVaults.map(() => KIND.CL_REBALANCE), ...harvests.map(() => KIND.HARD_WORK)];
-      const prios = [...folds.map(() => 0), ...clVaults.map(() => 1), ...harvests.map(() => 2)];
+      const targets = [...folds, ...clVaults];
+      const kinds = [...folds.map(() => KIND.HARD_WORK), ...clVaults.map(() => KIND.CL_REBALANCE)];
+      const prios = [...folds.map(() => 0), ...clVaults.map(() => 1)];
       await (await checker.connect(msig).addEntries(targets, kinds, prios)).wait();
       await (await checker.connect(msig).setKeeper(keeper.address, true)).wait();
-      assert.strictEqual((await checker.targetCount()).toNumber(), 25);
+      assert.strictEqual((await checker.targetCount()).toNumber(), 21);
 
       for (const t of targets) {
         const [s] = await checker.status(t);
         if (STATUS[s] !== "NOT_NEEDED") console.log(`      status ${t} ${STATUS[s]}`);
       }
       const checkGas = await checker.estimateGas.checkUpkeep("0x");
-      console.log(`      checkUpkeep over 25 entries: ~${checkGas.toString()} gas`);
+      console.log(`      checkUpkeep over 21 entries: ~${checkGas.toString()} gas`);
 
       const ran = [];
       for (let i = 0; i < 10; i++) {
@@ -499,10 +499,9 @@ describe("KeeperChecker (Base fork)", function () {
       assert(ran.includes(FOLD) && ran.includes(CL_W16), ran.join(","));
       assert(!(await checker.checkUpkeep("0x"))[0], "quiet after the loop");
 
-      // Runbook step 4: the old checkers can no longer rebalance or hard-work.
+      // Runbook step 4: empty the old CL checker (its governance EOA); it has nothing left to scan.
       await (await oldCL.removeVaults(cl)).wait();
-      await (await oldHW.removeVaults(hw)).wait();
-      assert(!(await oldCL.checkUpkeep("0x"))[0] && !(await oldHW.checkUpkeep("0x"))[0]);
+      assert(!(await oldCL.checkUpkeep("0x"))[0]);
     });
   });
 });

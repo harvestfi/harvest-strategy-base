@@ -6,9 +6,9 @@
 //
 // Needs ALCHEMEY_KEY (from .env or the environment).
 //
-// Entries are classified from each target's own checker() payload, not from which old checker holds
-// it, so the output is right whether or not the interim fix (fold strategy moved from the CL checker
-// to the hard-work checker) has been applied:
+// Entries come from CLChainlinkChecker, the only checker in use. The hard-work ChainlinkChecker
+// (0x81c7) is retired; its entries are not migrated. Each entry is classified from the target's own
+// checker() payload:
 //   rebalanceCurrentTick / rebalanceStakeRatio  -> CL_REBALANCE, priority 1
 //   doHardWork(address) and a fold strategy     -> HARD_WORK,    priority 0 (leverage safety)
 //   doHardWork(address) otherwise               -> HARD_WORK,    priority 2 (routine harvest)
@@ -22,7 +22,10 @@ require("dotenv").config();
 const CONTROLLER = "0xF90FF0F7c8Db52bF1bF869F74226eAD125EFa745";
 const MSIG = "0x920b1aCb7618B553324aa0F71620226FA2e09870";
 const OLD_CL = "0xaba4ba582E04B729ABCd2Bae0d7c14fe21C9F510";
-const OLD_HW = "0x81c733905e2Fd878fda137802E7bF578E3CDfbF7";
+const OLD_HW = "0x81c733905e2Fd878fda137802E7bF578E3CDfbF7"; // retired off-chain, still a hardWorker
+// Fold strategies registered whether or not CLChainlinkChecker still lists them, so taking one out of
+// the old checker first (as the interim fix did) cannot silently drop its leverage-safety entry.
+const FOLD_STRATEGIES = ["0xcfd2f32E6d533653cEd5Ba7E5fe1a76C3c626757"];
 const SLOT = {
   executor: "0x2b03419b0a75317010c2c9c6753d475bd595f74113c0ba88f0af572c718b3fda",
   deviation: "0xef14df50012225a4f04edea124bcd8271c46dcca17ab80e5f8f189e352fa097a",
@@ -73,8 +76,7 @@ async function main() {
 
   const listOf = async (old) => { const l = []; for (let i = 0; i < 100; i++) { const a = await tryCall(old, "vaults", i); if (!a) break; l.push(a); } return l; };
   const oldCl = await listOf(OLD_CL);
-  const oldHw = await listOf(OLD_HW);
-  const unique = [...new Set([...oldCl, ...oldHw])];
+  const unique = [...new Set([...FOLD_STRATEGIES, ...oldCl].map((a) => ethers.utils.getAddress(a)))];
 
   const entries = [];
   for (const t of unique) {
@@ -83,7 +85,7 @@ async function main() {
     const sel = res[1].slice(0, 10);
     const label = (await tryCall(t, "symbol")) || `strategy for ${(await tryCall(t, "vault")) || "?"}`;
     const width = await tryCall(t, "targetWidth");
-    const e = { target: t, label: width ? `${label} w${width}` : label, in: [oldCl.includes(t) && "CL", oldHw.includes(t) && "HW"].filter(Boolean).join("+") };
+    const e = { target: t, label: width ? `${label} w${width}` : label };
     if (sel === SEL.rebalance || sel === SEL.stakeRatio) {
       e.kind = KIND.CL_REBALANCE; e.priority = 1;
       e.governance = await tryCall(t, "governance");
@@ -112,10 +114,9 @@ async function main() {
   wire.push(tx(checker, "addEntries", [entries.map((e) => e.target), entries.map((e) => e.kind), entries.map((e) => e.priority)]));
   for (const k of keepers) wire.push(tx(checker, "setKeeper", [k, true]));
 
-  // Batch 2 (msig, after the new checker has performed): the hard-work checker loses its role and entries.
+  // Batch 2 (msig, optional hygiene): the retired hard-work checker still holds the hardWorker role.
   const decommission = [];
-  if (oldHw.length) decommission.push(tx(OLD_HW, "removeVaults", [oldHw]));
-  decommission.push(tx(CONTROLLER, "removeHardWorker", [OLD_HW]));
+  if (await c(CONTROLLER).hardWorkers(OLD_HW)) decommission.push(tx(CONTROLLER, "removeHardWorker", [OLD_HW]));
 
   fs.mkdirSync(out, { recursive: true });
   const file = (name, description, transactions) => {
@@ -128,15 +129,15 @@ async function main() {
     console.log(`wrote ${f} (${transactions.length} txs)`);
   };
   file("keeper-1-wire.json", "KeeperChecker: hardWorker + rebalanceExecutor on every CL vault + entries + keepers", wire);
-  file("keeper-2-decommission.json", "Retire ChainlinkChecker: remove its entries and its Controller hardWorker role", decommission);
+  if (decommission.length) file("keeper-2-hygiene.json", "Optional: revoke the retired ChainlinkChecker's Controller hardWorker role", decommission);
 
   console.log(`\nCLChainlinkChecker governance (EOA ${await c(OLD_CL).governance()}) - send after batch 1:`);
   console.log(`  to ${OLD_CL} data ${iface.encodeFunctionData("removeVaults", [oldCl])}`);
   for (const e of foreign) console.log(`  ${e.target} governance ${e.governance}: setRebalanceConfig data ${iface.encodeFunctionData("setRebalanceConfig", [e.deviation, e.cooldown, checker])}`);
 
-  console.log(`\n| # | target | label | kind | prio | in old | deviation | cooldown | executor now |`);
-  console.log(`|---|---|---|---|---|---|---|---|---|`);
-  entries.forEach((e, i) => console.log(`| ${i} | ${e.target} | ${e.label} | ${e.kind === 1 ? "CL_REBALANCE" : "HARD_WORK"} | ${e.priority} | ${e.in} | ${e.deviation ?? ""} | ${e.cooldown ?? ""} | ${e.executor ?? ""} |`));
+  console.log(`\n| # | target | label | kind | prio | deviation | cooldown | executor now |`);
+  console.log(`|---|---|---|---|---|---|---|---|`);
+  entries.forEach((e, i) => console.log(`| ${i} | ${e.target} | ${e.label} | ${e.kind === 1 ? "CL_REBALANCE" : "HARD_WORK"} | ${e.priority} | ${e.deviation ?? ""} | ${e.cooldown ?? ""} | ${e.executor ?? ""} |`));
 }
 
 function required(k) {
