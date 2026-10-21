@@ -212,12 +212,19 @@ contract Aave2AssetFoldStrategy_debtDenom is BaseUpgradeableStrategy {
     return getUint256(_STORED_BALANCE_SLOT);
   }
 
+  // The live position: oracle price, collateral in debt units, debt. Same
+  // arithmetic as snap's suppliedInDebt/borrowedDebt, minus the health read.
+  function _livePosition() internal view returns (uint256 price, uint256 supplied, uint256 debt) {
+    (price,) = _prices();
+    supplied = (IERC20(supplyAToken()).balanceOf(address(this)) * price) / 1e18;
+    debt = IERC20(borrowAToken()).balanceOf(address(this));
+  }
+
   // Recompute the cached net position value. Only needs prices + balances, so
   // it skips the getUserAccountData a full snap would do.
   function _updateStoredBalance() internal {
-    (uint256 priceSupplyInBorrow,) = _prices();
-    uint256 supplied = (IERC20(supplyAToken()).balanceOf(address(this)) * priceSupplyInBorrow) / 1e18;
-    setUint256(_STORED_BALANCE_SLOT, supplied - IERC20(borrowAToken()).balanceOf(address(this)));
+    (, uint256 supplied, uint256 debt) = _livePosition();
+    setUint256(_STORED_BALANCE_SLOT, supplied - debt);
   }
 
   function totalFeeNumerator() public view returns (uint256) {
@@ -377,9 +384,8 @@ contract Aave2AssetFoldStrategy_debtDenom is BaseUpgradeableStrategy {
   * Aave rejects withdrawals that would push the position below HF=1, so
   * the call reverts cleanly when the chunk is too large; governance
   * retries with a smaller value. Repeat until debt is zero or the position
-  * is at target. storedBalance is resynced at the end so any leftover idle
-  * underlying is not double-counted by investedUnderlyingBalance() before the
-  * next hard-work.
+  * is at target. storedBalance is resynced at the end so the fee baseline
+  * tracks the shrunken position.
   */
   function manualDeleverStep(uint256 collateralAmount) external onlyGovernance {
     AaveReserveLib.manualDeleverStep(
@@ -387,8 +393,8 @@ contract Aave2AssetFoldStrategy_debtDenom is BaseUpgradeableStrategy {
       supplyAsset(), underlying(), borrowAToken(),
       slippageBps(), collateralAmount
     );
-    // Resync the cached position value so NAV/pricePerShare reflects the
-    // shrunken position immediately (the step lowers it, so no fee accrues).
+    // Resync the cached position value to the shrunken position (the step
+    // lowers it, so no fee accrues).
     _updateStoredBalance();
   }
 
@@ -467,17 +473,24 @@ contract Aave2AssetFoldStrategy_debtDenom is BaseUpgradeableStrategy {
   }
 
   /**
-  * Returns the current balance.
+  * Returns the current balance, valued live: idle underlying + idle collateral
+  * + the net Aave position at the oracle price, less the booked fee AND the fee
+  * the next _accrueFee would book on any gain over storedBalance. So it never
+  * lags the position between interactions, and equals the post-preInteract()
+  * value to the wei. Floored at zero rather than reverting on the subtractions.
   */
   function investedUnderlyingBalance() public view returns (uint256) {
-    address _supplyAsset = supplyAsset();
-    uint256 balance = IERC20(underlying()).balanceOf(address(this));
-    uint256 supplyBalance = IERC20(_supplyAsset).balanceOf(address(this));
-    if (supplyBalance > 0) {
-      (uint256 priceSupplyInBorrow,) = _prices();
-      supplyBalance = (supplyBalance * priceSupplyInBorrow) / 1e18;
+    (uint256 priceSupplyInBorrow, uint256 live, uint256 debt) = _livePosition();
+    live = live > debt ? live - debt : 0;
+    uint256 fee = pendingFee();
+    uint256 prev = storedBalance();
+    if (live > prev) {
+      fee += ((live - prev) * totalFeeNumerator()) / feeDenominator();
     }
-    return balance + supplyBalance + storedBalance() - pendingFee();
+    uint256 gross = IERC20(underlying()).balanceOf(address(this))
+      + (IERC20(supplyAsset()).balanceOf(address(this)) * priceSupplyInBorrow) / 1e18
+      + live;
+    return gross > fee ? gross - fee : 0;
   }
 
   /**
