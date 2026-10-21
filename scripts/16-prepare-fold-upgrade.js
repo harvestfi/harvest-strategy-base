@@ -15,6 +15,12 @@
 //
 //   npx hardhat run scripts/16-prepare-fold-upgrade.js --network mainnet
 //   (optionally: AAVE_RESERVE_LIB=0x... to reuse an already-deployed library)
+//
+// The premium-free flashloan strategy needs AaveReserveLib.flash, which the
+// library deployed for impl 0x74ae6e11 (0x2B19aB8A) does not have. A strategy
+// linked to a stale library would revert every lever AND delever, i.e. every
+// deposit and withdrawal. So a reused library must match the compiled one
+// byte-for-byte (except its own address), or the script stops.
 
 const hre = require("hardhat");
 const { type2Transaction } = require("./utils.js");
@@ -32,7 +38,15 @@ async function main() {
   const AaveReserveLib = artifacts.require("AaveReserveLib");
   let libAddress = process.env.AAVE_RESERVE_LIB;
   if (libAddress) {
-    console.log("Reusing existing AaveReserveLib at:", libAddress);
+    // A library's runtime code starts with PUSH20 <its own address> (call
+    // protection), which the artifact leaves zeroed. Mask it, compare the rest.
+    const onchain = (await web3.eth.getCode(libAddress)).toLowerCase();
+    const compiled = (await hre.artifacts.readArtifact("AaveReserveLib")).deployedBytecode.toLowerCase();
+    const masked = onchain.slice(0, 4) + "0".repeat(40) + onchain.slice(44);
+    if (masked !== compiled) {
+      throw new Error(`AAVE_RESERVE_LIB ${libAddress} is not this build's AaveReserveLib (stale library?). Unset it to deploy a fresh one.`);
+    }
+    console.log("Reusing existing AaveReserveLib at:", libAddress, "(bytecode matches this build)");
   } else {
     const lib = await type2Transaction(AaveReserveLib.new);
     libAddress = lib.creates;

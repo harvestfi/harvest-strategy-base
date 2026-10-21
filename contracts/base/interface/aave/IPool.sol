@@ -17,6 +17,15 @@ interface IPool {
     bytes calldata params,
     uint16 referralCode
   ) external;
+  function flashLoan(
+    address receiverAddress,
+    address[] calldata assets,
+    uint256[] calldata amounts,
+    uint256[] calldata interestRateModes,
+    address onBehalfOf,
+    bytes calldata params,
+    uint16 referralCode
+  ) external;
   function getUserAccountData(address user) external view returns (
     uint256 totalCollateralBase,
     uint256 totalDebtBase,
