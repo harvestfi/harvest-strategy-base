@@ -156,7 +156,9 @@ describe("Aave fold LIVE upgrade (fork)", function() {
 
     // The legacy holder can exit for ~their claim (allowing the strategy's unwind slippage).
     const wethBefore = await wethOf(farmer);
-    await v.redeem(farmerShares.toFixed(), farmer, farmer, { from: farmer });
+    // Named signature: FoldVaultV2 also has redeem(uint256,address,address,uint256), and
+    // truffle would otherwise take the options object for minAssets.
+    await v.methods["redeem(uint256,address,address)"](farmerShares.toFixed(), farmer, farmer, { from: farmer });
     const got = (await wethOf(farmer)).minus(wethBefore);
     Utils.assertBNGte(got, claim1.times(98).div(100)); // within ~2% (unwind slippage + premium)
     Utils.assertBNEq(new BigNumber(await v.balanceOf(farmer)), 0);
@@ -187,7 +189,7 @@ describe("Aave fold LIVE upgrade (fork)", function() {
     // preInteract(), so FoldVaultV2's preInteract call resolves. No ordering brick.
     await deposit(farmer2, web3.utils.toWei("0.02"));
     Utils.assertBNGt(new BigNumber(await v.balanceOf(farmer2)), 0);
-    await v.redeem(shares, farmer, farmer, { from: farmer });
+    await v.methods["redeem(uint256,address,address)"](shares, farmer, farmer, { from: farmer });
     Utils.assertBNEq(new BigNumber(await v.balanceOf(farmer)), 0);
 
     // The only new capability the vault upgrade adds is the deposit cap.

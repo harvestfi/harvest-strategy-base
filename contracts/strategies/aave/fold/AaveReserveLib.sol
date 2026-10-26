@@ -7,6 +7,10 @@ import "../../../base/interface/IUniversalLiquidator.sol";
 import "../../../base/interface/aave/IPool.sol";
 import "./AaveViewer.sol";
 
+interface IMorphoFlash {
+  function flashLoan(address token, uint256 assets, bytes calldata data) external;
+}
+
 /**
  * @notice Off-strategy helpers for the Aave 2-asset fold strategy. Lives as an
  *         external library (DELEGATECALL) so the strategy fits the EIP-170
@@ -36,6 +40,13 @@ library AaveReserveLib {
   uint256 internal constant BPS = 10_000;
   uint256 private constant CAP_MASK = (1 << 36) - 1;
   address private constant VIEWER = address(0x1e51654aB193bA165b7F7715C734dAF454f08148);
+  // Morpho Blue singleton on Base: fee-free flashLoan over every token it holds.
+  address internal constant MORPHO = address(0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb);
+  // Transient flag (EIP-1153), set only around the strategy's own Morpho
+  // flashLoan, so onMorphoFlashLoan can prove the flash is self-initiated.
+  // keccak256("eip1967.strategyStorage.morphoFlash") - 1; transient storage
+  // never touches the proxy's persistent layout.
+  uint256 internal constant MORPHO_FLASH_SLOT = 0x09eba19dbabdc3ad0a3fb413f6423b6744f51f21189482c5bfa3ac982fc17fa9;
 
   // ---------------------------------------------------------------------------
   // Prices: one getPrice read; the reverse direction is its exact reciprocal.
@@ -202,6 +213,41 @@ library AaveReserveLib {
   ) external {
     _swap(universalLiquidator, from, to, amount, supplyAsset, underlying,
           priceSupplyInBorrow, priceBorrowInSupply, slippageBps);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Premium-free flashloans.
+  //   Lever:   Aave flashLoan with interestRateMode 2. Aave opens the flashed
+  //            amount as variable debt on the strategy after the callback
+  //            (BorrowLogic.executeBorrow, the same borrow validation as a plain
+  //            borrow) and charges no premium in that mode.
+  //   Delever: Morpho Blue flashLoan, which has no fee. When Morpho does not
+  //            hold enough of the asset, fall back to an Aave flashLoan in mode 0
+  //            (FLASHLOAN_PREMIUM_TOTAL, repaid from the callback's approval).
+  // The callbacks (executeOperation / onMorphoFlashLoan) live on the strategy.
+  // ---------------------------------------------------------------------------
+  function flash(address pool, address asset, uint256 amount, bool lever, bytes memory params) external {
+    if (!lever && IERC20(asset).balanceOf(MORPHO) >= amount) {
+      assembly { tstore(MORPHO_FLASH_SLOT, 1) }
+      IMorphoFlash(MORPHO).flashLoan(asset, amount, params);
+      assembly { tstore(MORPHO_FLASH_SLOT, 0) }
+      return;
+    }
+    address[] memory assets = new address[](1);
+    uint256[] memory amounts = new uint256[](1);
+    uint256[] memory modes = new uint256[](1);
+    assets[0] = asset;
+    amounts[0] = amount;
+    if (lever) modes[0] = 2;
+    IPool(pool).flashLoan(address(this), assets, amounts, modes, address(this), params, 0);
+  }
+
+  // Premium (bps) a delever flash pays: 0 while Morpho can lend the whole debt
+  // (every delever flashes at most the debt, so `flash` then always takes
+  // Morpho), else Aave's FLASHLOAN_PREMIUM_TOTAL.
+  function deleverPremiumBps(address pool, address asset, address debtToken) external view returns (uint256) {
+    if (IERC20(asset).balanceOf(MORPHO) >= IERC20(debtToken).balanceOf(address(this))) return 0;
+    return IPool(pool).FLASHLOAN_PREMIUM_TOTAL();
   }
 
   // ---------------------------------------------------------------------------
