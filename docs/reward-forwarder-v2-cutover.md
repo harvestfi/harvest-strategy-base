@@ -18,13 +18,24 @@ incident. Every protection was checked by a mutation that turns its test red.
 
 | Pair | maxIn | Floor |
 |---|---|---|
-| USDC -> WETH | 50,000 USDC | Chainlink USDC/USD (`0x7e86…`, maxAge 90000 s) and ETH/USD (`0x7104…`, maxAge 3600 s), `oracleToleranceBps` 200. `minRate` 0 |
-| WETH -> iFARM | 0.02 WETH | `minRate` = 0.85 x fair, about 158e18 today (fair is about 186 iFARM/WETH: L1 FARM/WETH divided by L1 iFARM `getPricePerFullShare`) |
-| Each other fee token | per token | A Chainlink feed where one exists, otherwise a static `minRate`. Or leave the token unlisted on purpose (its platform fee then waits too) |
+| USDC -> WETH | 10,000 USDC | Chainlink USDC/USD (`0x7e86…`, maxAge 90000 s) and ETH/USD (`0x7104…`, maxAge 3600 s), `oracleToleranceBps` 200. `minRate` 0 |
+| WETH -> iFARM | 0.01 WETH | A `UniV3TwapFeed` for iFARM: the 30-min TWAP of the FARM/iFARM and WETH/FARM Uniswap V3 pools x ETH/USD (maxAge 3600 s), less 200 bps. `minRate` = 0.8 x today's TWAP rate, a circuit breaker |
+| FARM -> WETH | 2 FARM | A `UniV3TwapFeed` for FARM (WETH/FARM pool TWAP x ETH/USD), less 200 bps. `minRate` = 0.8 x today's TWAP rate |
+| Each other fee token | per token | A Chainlink feed where one exists. Or leave the token unlisted on purpose (its platform fee then waits too) |
 
-- **Throughput.** One chunk per call means the cadence sets capacity. At 8 h x 0.02 WETH that is 0.06
-  WETH/day, which is about today's profit-share flow and too tight. Run the scheduled call hourly
-  (0.48 WETH/day), or have the bot call `buyProfitShare`.
+- **The iFARM price is the Base market's.** Nothing is anchored to Ethereum.
+  - The floor follows the Base pools' 30-min TWAP, so a push inside one block cannot make V2 overpay.
+  - A 0.01 WETH chunk fills about 1.3% under the TWAP: two 0.3% fees plus impact.
+  - The `minRate` breaker stops buying if the TWAP itself runs a quarter above its level at deploy, for
+    example when someone holds the price or V2's own buys are the only flow. The Safe moves it.
+- **Cardinality.** First raise both pools' observation cardinality to 1,000, in steps of at most 450
+  (`increaseObservationCardinalityNext`, permissionless).
+  - With a single observation, the TWAP cannot be read for 30 min after any swap, and V2 then skips the
+    buy.
+  - Above 900 slots (30 min of 2 s blocks), a flood of tiny swaps cannot make it unreadable.
+
+- **Throughput.** One chunk per call means the cadence sets capacity. Hourly x 0.01 WETH is 0.24 WETH/day,
+  about three times today's profit-share flow.
 - **`minBuyInterval`.** 600–3600 s. It rate-limits both paths, which bounds what a compromised hardWorker
   can buy at the floor.
 - **Fee tokens.** V1's last 30 days of inflow came in USDC, WETH, AERO, FARM, USDbC, cbBTC, EURC, WELL,
@@ -72,17 +83,15 @@ incident. Every protection was checked by a mutation that turns its test red.
    - Growth of `pendingProfitShare(WETH)`.
    - N consecutive `SwapFailed` or `SwapSkipped` for one pair.
    - `FeeNotified` for an unlisted token.
-   - The WETH->iFARM floor drifting from fair (FARM/ETH moves). A hardWorker can tighten it with
-     `setKeeperRate`; loosening it needs the Safe.
+   - Either circuit breaker within 10% of the TWAP (the market moved for good). Moving it needs the Safe.
 
 ## Known limits
 
-- **FARM fees round-trip.** They go FARM -> WETH -> FARM -> iFARM (about $95/month of inflow). List FARM
-  with a static floor, or leave it parked.
+- **FARM fees round-trip.** They go FARM -> WETH -> FARM -> iFARM (about $95/month of inflow).
 - **Donations can delay buys.** Anyone can delay a buy by donating input to the exact dex ahead of a
   scheduled call. The liquidator sells the dex's whole balance, so the swap partial-fills and reverts.
   The donor can only win the donation back at a cost, through a fillable swap. Funds stay safe, and the
   chunk stays buffered.
-- **Keeper-side quoting is not built.** The plan was a fair value from L1 NAV (take the max of the
-  sources, not the min) and a tolerance that allows for the ~3% Base iFARM premium. The contract
-  supports it through `buyProfitShare` and `setKeeperRate`.
+- **The TWAP can be held.** In pools where Harvest is nearly the only trader, holding a price for 30 min is
+  cheap (about 3.7 WETH at risk to lift iFARM a third). It wins at most the breaker's slack on V2's
+  stage-2 flow, which the breaker caps.
