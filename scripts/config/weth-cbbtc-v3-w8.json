@@ -1,0 +1,43 @@
+{
+  "name": "weth-cbbtc-v3-w8",
+  "addressesPath": "test/test-config.js",
+  "_comment_pool": "WETH/cbBTC tickSpacing=10 on the post-merger Aero (Slipstream V3) CL factory 0x9CB220581b91b0C83223012FE69688b92aD07a76. Pool 0xbB5507DaaE822ba89C4dA61BbfDf4b49a1666BAc, V3 CL gauge 0x5b14d6D194E49330647eB4717010aDe1B1B3f8B5 (window 7 blocks, 100% forfeit on 2026-10-29). This is the fixture of test/aeroCL/v3-penalty-window.js. The F2 config it replaces targets a gauge killed on 2026-10-21.",
+  "_comment_reward": "New AERO 0x3f5bF3Ed. As of 2026-10-29 the UL registry has no route for it and the old Aerodrome dex cannot reach the new pools, so _swap skips (swapSkippedCount) and AERO accrues on the strategy until a route is registered. Register the route BEFORE launch.",
+  "_comment_width": "targetWidth=8 -> 80 ticks -> 0.80% span, matching the test fixture exactly.",
+  "_comment_seed": "Mint BOTH seeds with scripts/19-mint-cl-seed-v2.js (CL_WIDTH=8, CL_TARGET_BPS=8000), then paste the two ids below. They must share one range; initializeVault enforces it.",
+  "posId": "REPLACE_WITH_STAKED_POS_ID",
+  "bufferPosId": "REPLACE_WITH_BUFFER_POS_ID",
+  "posManager": "0x4857DB576eE0e45F10525eC59527BfD10beeC60b",
+  "pool": "0xbB5507DaaE822ba89C4dA61BbfDf4b49a1666BAc",
+  "gauge": "0x5b14d6D194E49330647eB4717010aDe1B1B3f8B5",
+  "targetWidth": "8",
+  "rebalanceHelper": "0x74a343dECf3b4578B07D0F7b7577aB2f3c4762b2",
+  "_comment_stake": "windowSafety is in BLOCKS since the V3 port (Base: 2s blocks).",
+  "stake": {
+    "targetStakedBps": 8000,
+    "bandBps": 1000,
+    "windowSafety": 2
+  },
+  "rebalance": {
+    "deviation": 0,
+    "cooldown": 5,
+    "executor": "0xaba4ba582E04B729ABCd2Bae0d7c14fe21C9F510",
+    "maxSwapBps": 10000,
+    "maxSlippageBps": 100,
+    "twapWindow": 120,
+    "maxTwapDeviationBps": 200
+  },
+  "strategy": {
+    "minRewardToCompound": "10000000000000000",
+    "rewardToken": "0x3f5bF3EdAc59d650D8fDf9657a71F2f904A3a4Ee"
+  },
+  "_comment_wrappers": "Two CLWrapperV2 instances, identical ABI to V1's CLWrapper (verified: 40 entries, no differences). previewSafetyBps is display-only now — deposit/redeem no longer use the preview as an execution minimum — but it is raised above the 25bps default so the ERC4626 previews stay conservative.",
+  "wrappers": {
+    "deploy": true,
+    "previewSafetyBps": 100
+  },
+  "useSetupStorage": true,
+  "finalizeStorage": true,
+  "verify": true,
+  "snapshotPath": "scripts/deployments/cl/weth-cbbtc-v3-w8.json"
+}

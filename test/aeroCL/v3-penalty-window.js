@@ -67,6 +67,10 @@ describe("CLVaultV2 twin-position on an Aero V3 CL gauge (block-based penalty wi
   const posId = async () => (await vault.posId()).toString();
   const stakedOwner = async () => (await nft.ownerOf(await vault.posId())).toLowerCase();
   const growth = async () => (await gauge.methods.rewardGrowthInside(await posId()).call()).toString();
+  // Ground truth from the gauge itself, independent of the code under test.
+  const gaugeWindowEnd = async () => Number(await gauge.methods.depositBlock(await posId()).call())
+    + Number((await factory.methods.effectivePenaltyConfig(GAUGE3).call()).minStakeBlocks);
+  const mineClear = async extra => mine(Math.max(0, await gaugeWindowEnd() + SAFETY - await blockNow()) + extra);
   const setWindow = async n => factory.methods.setMinStakeBlocks(GAUGE3, n).send({ from: PENALTY_ADMIN, gas: 300000 });
   const penaltiesIn = async rc => {
     const r = await web3.eth.getTransactionReceipt(rc.tx || rc.transactionHash);
@@ -177,7 +181,7 @@ describe("CLVaultV2 twin-position on an Aero V3 CL gauge (block-based penalty wi
     assert.equal(await growth(), g0, "the gauge must not have been claimed against");
     assert.isTrue(BN(await aero.balanceOf(strategy.address)).eq(a0));
 
-    await mine(Math.max(0, end - await blockNow()) + 300);
+    await mineClear(300);
     assert.equal(await strategy.isOutsideStakeWindow(), true);
     const ids = [await posId()];
     const earned = BN(await gauge.methods.earned(strategy.address, ids).call());
@@ -193,7 +197,7 @@ describe("CLVaultV2 twin-position on an Aero V3 CL gauge (block-based penalty wi
 
   it("honours a retroactive minStakeBlocks raise by the PENALTY_ADMIN", async () => {
     const dep = Number(await gauge.methods.depositBlock(await posId()).call());
-    await mine(Number(await vault.stakeWindowEnd()) - await blockNow() + 50);
+    await mineClear(50);
     assert.equal(await vault.isOutsideStakeWindow(), true, "precondition: clear of today's window");
 
     const RAISED = 90000;
@@ -209,7 +213,7 @@ describe("CLVaultV2 twin-position on an Aero V3 CL gauge (block-based penalty wi
     await expectRevert(vault.rebalanceStakeRatio({ from: gov }), "ErrInsideStakeWindow");
     await expectRevert(vault.rebalanceCurrentTick(WIDTH, { from: gov }), "ErrInsideStakeWindow");
 
-    await mine(dep + RAISED - await blockNow() + 1);
+    await mineClear(1);
     const a0 = BN(await aero.balanceOf(strategy.address));
     const rc2 = await strategy.doHardWork({ from: gov });
     assert.equal((await strategyEvents(rc2, "HarvestSkippedInsideWindow")).length, 0);
@@ -280,7 +284,7 @@ describe("CLVaultV2 twin-position on an Aero V3 CL gauge (block-based penalty wi
   it("fails CLOSED when the window cannot be read", async () => {
     for (const code of ["0x60006000fd", "0x"]) {
       const s = await hre.network.provider.send("evm_snapshot");
-      await mine(Number(await vault.stakeWindowEnd()) - await blockNow() + 10);
+      await mineClear(10);
       assert.equal(await strategy.isOutsideStakeWindow(), true, "precondition: clear of the real window");
       await hre.network.provider.send("hardhat_setCode", [GFACTORY, code]);
       assert.isTrue(BN(await strategy.stakeWindowEnd()).eq(MAX), `unreadable factory (${code}) must read as inside`);
@@ -292,7 +296,7 @@ describe("CLVaultV2 twin-position on an Aero V3 CL gauge (block-based penalty wi
   });
 
   it("never stakes in a tx whose claim failed; a plain harvest just reports it", async () => {
-    await mine(Number(await vault.stakeWindowEnd()) - await blockNow() + 10);
+    await mineClear(10);
     await hre.network.provider.send("hardhat_setCode", [LEAF_VOTER, "0x60006000fd"]);
     // unstake(true) is what the rebalance path uses before it re-stakes: it must refuse.
     await expectRevert(strategy.unstake(true, { from: gov }), "ErrClaimFailed");
@@ -316,7 +320,7 @@ describe("CLVaultV2 twin-position on an Aero V3 CL gauge (block-based penalty wi
   });
 
   it("reports what a harvest does with sell() on and no new-AERO route (informational)", async () => {
-    await mine(Number(await vault.stakeWindowEnd()) - await blockNow() + 300);
+    await mineClear(300);
     await strategy.setSell(true, { from: gov });
     await strategy.setMinRewardToCompound(AERO3, 1, { from: gov });
     let outcome;
