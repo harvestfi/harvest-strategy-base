@@ -28,6 +28,7 @@ interface ICLVaultV2 is ICLVault {
     /// configured safety margin), i.e. when discretionary operations may unstake for free.
     function isOutsideStakeWindow() external view returns (bool);
 
+    /// @notice A block number, not a timestamp.
     function stakeWindowEnd() external view returns (uint256);
 
 }

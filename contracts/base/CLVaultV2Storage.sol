@@ -72,7 +72,7 @@ contract CLVaultV2Storage is CLVaultStorage {
         return getUint256(_STAKE_RATIO_BAND_BPS_SLOT);
     }
 
-    /// @notice Seconds of margin added to the gauge's minStakeTime before discretionary operations
+    /// @notice Blocks of margin added to the gauge's minStakeBlocks before discretionary operations
     /// are considered safe. Absorbs the gap between a keeper simulating and the tx landing.
     function _setStakeWindowSafety(uint256 v) internal {
         setUint256(_STAKE_WINDOW_SAFETY_SLOT, v);

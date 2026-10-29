@@ -6,7 +6,7 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts-upgradeable/token/ERC721/utils/ERC721HolderUpgradeable.sol";
 import "../../base/interface/IUniversalLiquidator.sol";
 import "../../base/upgradability/BaseUpgradeableStrategyCL.sol";
-import "../../base/interface/aerodrome/ICLGaugeV2.sol";
+import "../../base/interface/aerodrome/ICLGaugeV3.sol";
 import "../../base/interface/ICLVaultV2.sol";
 import "../../base/interface/concentrated-liquidity/INonfungiblePositionManager.sol";
 import "../../base/CLRebalanceLibV2.sol";
@@ -18,17 +18,25 @@ import "../../base/interface/ICLRebalanceHelper.sol";
 /// staking internals are non-virtual, and inheriting them would leave a callable path that
 /// unstakes inside the forfeit window — precisely the failure this design exists to prevent.
 ///
+/// Targets the post-merger Aero V3 CL gauges (`ICLGaugeV3`). Their window is block-based and per
+/// tokenId; see that interface for the verified semantics.
+///
 /// What changes versus V1:
-///   * `doHardWork` is gated on being clear of the gauge window. Inside it, a claim pays nothing
-///     (the gauge's `earned()` is penalty-adjusted and reads 0), so harvesting there would burn gas
-///     to forfeit rewards.
+///   * `doHardWork` is gated on being clear of the gauge window. A claim inside it forfeits ALL of
+///     the position's accrued emissions, so harvesting there would burn them.
+///   * The gate FAILS CLOSED: if the window cannot be read, `stakeWindowEnd` reports "inside" and the
+///     harvest is skipped rather than claiming blind.
 ///   * Compounded rewards go into the vault's BUFFER position, not the staked one. Adding to the
-///     staked position is impossible anyway — the gauge blocks `increaseLiquidity` while it holds
-///     the NFT (verified on-chain) — but routing to the buffer is also what keeps the cushion
-///     topped up without an unstake.
-///   * `minStakeTime` is always read live from the gauge factory. It is 300s in practice today but
-///     is upstream-governance mutable up to `MAX_MIN_STAKE_TIME` (7 days), so nothing may cache or
-///     hardcode it.
+///     staked position is impossible anyway — the position manager only lets the gauge touch a
+///     staked NFT — and routing to the buffer keeps the cushion topped up without an unstake. The
+///     buffer is never staked, so it has no window of its own to re-arm.
+///   * The window is always read live (`depositBlock` plus the factory's `effectivePenaltyConfig`).
+///     It is 7–150 blocks today, but the PENALTY_ADMIN can raise it to 90000 blocks retroactively,
+///     so nothing may cache or hardcode it.
+///   * A tx whose claim failed never goes on to stake: `unstake(true)` reverts instead, and every
+///     caller of it re-stakes in the same tx.
+///   * Exit paths (`unstake(false)`, `emergencyExit`) are never window-gated. They fall back to the
+///     gauge's `emergencyWithdraw` if its claiming `withdraw` reverts.
 contract AerodromeCLStrategyV2 is BaseUpgradeableStrategyCL, ERC721HolderUpgradeable {
   using SafeERC20 for IERC20;
 
@@ -61,7 +69,8 @@ contract AerodromeCLStrategyV2 is BaseUpgradeableStrategyCL, ERC721HolderUpgrade
   uint256 public swapSkippedCount;
   uint256 public lastSwapSkippedAt;
 
-  event HarvestSkippedInsideWindow(uint256 windowEnd, uint256 timestamp);
+  event HarvestSkippedInsideWindow(uint256 windowEndBlock, uint256 blockNumber);
+  event ClaimFailed(address gauge);
   event EmergencyStateUpdated(bool pauseInvesting, bool pauseHarvesting, bool withdrawOnly);
   event GaugeUpdated(address oldGauge, address newGauge);
   event CompoundedIntoBuffer(uint256 amount0, uint256 amount1, uint128 liquidity);
@@ -71,6 +80,7 @@ contract AerodromeCLStrategyV2 is BaseUpgradeableStrategyCL, ERC721HolderUpgrade
   error ErrNotVault();
   error ErrBadSlippage();
   error ErrZeroGauge();
+  error ErrClaimFailed();
 
   /// @dev Both position NFTs live here — the staked one (lent to the gauge while staked) and the
   /// unstaked buffer. Keeping them under one owner means every NFT mutation has a single caller,
@@ -104,44 +114,44 @@ contract AerodromeCLStrategyV2 is BaseUpgradeableStrategyCL, ERC721HolderUpgrade
   // window state — the whole point of V2
   // --------------------------------------------------------------------------------------------
 
-  /// @notice The gauge's current minimum stake time for this pool, read live from its factory.
-  function minStakeTime() public view returns (uint256) {
-    address gauge = rewardPool();
-    try ICLGaugeV2(gauge).gaugeFactory() returns (address f) {
-      try ICLGaugeFactoryV2(f).minStakeTimes(ICLGaugeV2(gauge).pool()) returns (uint256 v) {
-        return v;
-      } catch {
-        return 0;
-      }
-    } catch {
-      // F1-style gauges have no penalty surface at all; treat the window as always elapsed.
-      return 0;
-    }
-  }
-
-  /// @notice When the staked position leaves the forfeit window. Zero when nothing is staked,
-  /// which reads as "outside" — there is no penalty to avoid if we hold no staked position.
+  /// @notice The block at which the staked position leaves the forfeit window: the gauge's
+  /// `depositBlock` plus the factory's live `minStakeBlocks`. Zero when nothing is staked or the
+  /// gauge's penalty is switched off, which reads as "outside".
+  ///
+  /// FAILS CLOSED: if the gauge or its factory cannot be read, this returns `type(uint256).max`, so
+  /// the harvest gate skips instead of claiming into an unknown window. Low-level calls rather than
+  /// try/catch, because try/catch does not catch a return that fails to decode. Exit paths read this
+  /// only for reporting, so a failed read can never hold up a withdrawal.
   function stakeWindowEnd() public view returns (uint256) {
-    uint256 id = posId();
-    if (INonfungiblePositionManager(posManager()).ownerOf(id) != rewardPool()) return 0;
-    try ICLGaugeV2(rewardPool()).depositTimestamp(id) returns (uint256 ts) {
-      return ts + minStakeTime();
-    } catch {
-      return 0;
-    }
+    if (!_nftStaked()) return 0;
+    address gauge = rewardPool();
+    (bool ok, bytes memory ret) = gauge.staticcall(abi.encodeCall(ICLGaugeV3.gaugeFactory, ()));
+    if (!ok || ret.length < 32) return type(uint256).max;
+    (ok, ret) = abi.decode(ret, (address)).staticcall(
+      abi.encodeCall(ICLGaugeFactoryV3.effectivePenaltyConfig, (gauge))
+    );
+    if (!ok || ret.length < 64) return type(uint256).max;
+    (uint256 minStakeBlocks, uint256 penaltyRate) = abi.decode(ret, (uint256, uint256));
+    // Mirrors the gauge's own `_applyPenalty` condition.
+    if (penaltyRate == 0 || minStakeBlocks == 0) return 0;
+    (ok, ret) = gauge.staticcall(abi.encodeCall(ICLGaugeV3.depositBlock, (posId())));
+    if (!ok || ret.length < 32) return type(uint256).max;
+    uint256 depositBlock = abi.decode(ret, (uint256));
+    if (depositBlock > type(uint256).max - minStakeBlocks) return type(uint256).max;
+    return depositBlock + minStakeBlocks;
   }
 
   function isOutsideStakeWindow() public view returns (bool) {
-    return block.timestamp >= stakeWindowEnd();
+    return block.number >= stakeWindowEnd();
   }
 
-  /// @notice What a claim right now would forfeit, as reported by the gauge. `earned()` is already
-  /// penalty-adjusted, so this is the difference between the two sides of the window rather than a
-  /// raw accrual figure; it reads 0 while inside.
+  /// @notice What a claim right now would pay, as reported by the gauge, including any deferred
+  /// emissions. `earned()` is penalty-adjusted, so it reads 0 for the position while inside.
   function claimableNow() external view returns (uint256) {
-    uint256 id = posId();
-    if (INonfungiblePositionManager(posManager()).ownerOf(id) != rewardPool()) return 0;
-    try ICLGaugeV2(rewardPool()).earned(address(this), id) returns (uint256 v) {
+    if (!_nftStaked()) return 0;
+    uint256[] memory ids = new uint256[](1);
+    ids[0] = posId();
+    try ICLGaugeV3(rewardPool()).earned(address(this), ids) returns (uint256 v) {
       return v;
     } catch {
       return 0;
@@ -168,7 +178,7 @@ contract AerodromeCLStrategyV2 is BaseUpgradeableStrategyCL, ERC721HolderUpgrade
     (,,,,,,, uint128 liq,,,,) = INonfungiblePositionManager(posManager()).positions(id);
     if (liq == 0) return;
     IERC721(posManager()).approve(rewardPool(), id);
-    ICLGaugeV2(rewardPool()).deposit(id);
+    ICLGaugeV3(rewardPool()).deposit(id);
   }
 
   /// @notice Pull the staked position out of the gauge. It stays HERE rather than going to the
@@ -177,12 +187,28 @@ contract AerodromeCLStrategyV2 is BaseUpgradeableStrategyCL, ERC721HolderUpgrade
   ///
   /// Callers only reach this from paths that have already accepted the forfeit (a withdrawal
   /// larger than the buffer) or that are gated on the window having elapsed.
+  ///
+  /// With `compound`, the claim must succeed: every caller that compounds (a range rebalance, a
+  /// strategy swap) re-stakes later in the same tx, and staking after a failed claim is what this
+  /// design must never do. If the claim keeps failing, `emergencyExit` unstakes without claiming.
   function unstake(bool compound) public restricted {
     if (compound && isOutsideStakeWindow()) {
-      _claimAndCompound();
+      _claimAndCompound(true);
     }
     if (_nftStaked()) {
-      ICLGaugeV2(rewardPool()).withdraw(posId());
+      _gaugeWithdraw();
+    }
+  }
+
+  /// @dev `withdraw` claims on the way out (deferring the emissions if their mint fails), so the
+  /// emissions side of the gauge can still make it revert. An exit must not depend on that, so fall
+  /// back to `emergencyWithdraw`, which drops the accrual but returns the NFT. It only works while
+  /// the gauge factory allows it; if it does not, its revert is the one that surfaces.
+  function _gaugeWithdraw() internal {
+    address gauge = rewardPool();
+    uint256 id = posId();
+    try ICLGaugeV3(gauge).withdraw(id) {} catch {
+      ICLGaugeV3(gauge).emergencyWithdraw(id);
     }
   }
 
@@ -356,24 +382,48 @@ contract AerodromeCLStrategyV2 is BaseUpgradeableStrategyCL, ERC721HolderUpgrade
 
   /// @notice Claim AERO and compound it into the vault's buffer position.
   ///
-  /// Claiming does NOT move the gauge's `depositTimestamp` (verified on-chain), so this never
+  /// Claiming does NOT move the gauge's `depositBlock` (verified in the gauge source), so this never
   /// extends the window — it only has to wait for the window to pass so the claim actually pays.
+  /// The window is re-read here, in the claiming tx, so a retroactive raise is always honoured.
   function doHardWork() external onlyNotPausedInvesting restricted {
     if (harvestPaused || withdrawOnlyMode) return;
     uint256 end = stakeWindowEnd();
-    if (block.timestamp < end) {
+    if (block.number < end) {
       // Not an error: the keeper is expected to retry. Reverting would make a routine, expected
       // condition look like a failure in every monitoring surface.
-      emit HarvestSkippedInsideWindow(end, block.timestamp);
+      emit HarvestSkippedInsideWindow(end, block.number);
       return;
     }
-    _claimAndCompound();
+    _claimAndCompound(false);
   }
 
-  function _claimAndCompound() internal {
-    if (_nftStaked()) {
-      try ICLGaugeV2(rewardPool()).getReward(posId()) {} catch {}
+  /// @dev Claim the staked position's emissions plus anything the gauge deferred for us. Callers
+  /// must already be outside the window. Returns false, without reverting, if the claim failed.
+  function _claimEmissions() internal returns (bool) {
+    address gauge = rewardPool();
+    bool staked = _nftStaked();
+    uint256[] memory ids = new uint256[](staked ? 1 : 0);
+    if (staked) {
+      ids[0] = posId();
+    } else {
+      // The gauge reverts 'NS' on an empty claim; with nothing staked or deferred there is nothing
+      // to claim, which is not a failure.
+      try ICLGaugeV3(gauge).deferredEmissions(address(this)) returns (uint256 d) {
+        if (d == 0) return true;
+      } catch {
+        return true;
+      }
     }
+    try ICLGaugeV3(gauge).claimEmissions(address(this), address(this), ids) {
+      return true;
+    } catch {
+      emit ClaimFailed(gauge);
+      return false;
+    }
+  }
+
+  function _claimAndCompound(bool requireClaim) internal {
+    if (!_claimEmissions() && requireClaim) revert ErrClaimFailed();
     // Collect the BUFFER's accrued swap fees so they compound too. Only the buffer earns them —
     // the staked side's fees go to voters via the gauge — and left uncollected they sit as
     // tokensOwed: outside totalLiquidity(), outside NAV, and earning nothing.
@@ -575,11 +625,11 @@ contract AerodromeCLStrategyV2 is BaseUpgradeableStrategyCL, ERC721HolderUpgrade
   /// @notice Pull the position out of the gauge and stop all discretionary activity.
   ///
   /// Deliberately does NOT wait for the forfeit window: an emergency is exactly the case where
-  /// losing at most one window's AERO is preferable to staying in the gauge. Whether that costs
-  /// anything is visible up-front via `claimableNow()`.
+  /// losing the position's accrued AERO is preferable to staying in the gauge. Whether that costs
+  /// anything is visible up-front: `claimableNow()` reads 0 while `isOutsideStakeWindow()` is false.
   function emergencyExit() public onlyGovernance {
     if (_nftStaked()) {
-      ICLGaugeV2(rewardPool()).withdraw(posId());
+      _gaugeWithdraw();
     }
     _setPausedInvesting(true);
     harvestPaused = true;
@@ -621,10 +671,10 @@ contract AerodromeCLStrategyV2 is BaseUpgradeableStrategyCL, ERC721HolderUpgrade
     if (_newGauge == address(0)) revert ErrZeroGauge();
     address old = rewardPool();
     if (isOutsideStakeWindow()) {
-      _claimAndCompound();
+      _claimAndCompound(false);
     }
     if (_nftStaked()) {
-      ICLGaugeV2(old).withdraw(posId());
+      _gaugeWithdraw();
     }
     _setRewardPool(_newGauge);
     emit GaugeUpdated(old, _newGauge);

@@ -17,8 +17,8 @@ import "./interface/concentrated-liquidity/INonfungiblePositionManager.sol";
 
 /// @notice Twin-position CL vault for gauges that penalise early unstaking.
 ///
-/// The second Aerodrome deployment's gauges forfeit 100% of accrued AERO on any withdraw or claim
-/// made inside `minStakeTime` of the last stake. V1 unstakes on EVERY deposit and withdraw, so on
+/// The post-merger Aero V3 CL gauges forfeit 100% of a position's accrued emissions on any withdraw
+/// or claim made inside `minStakeBlocks` of its last stake (see `ICLGaugeV3`). V1 unstakes on EVERY deposit and withdraw, so on
 /// such a gauge every user interaction both forfeits the accrued rewards and restarts the window —
 /// which is trivially grief-able.
 ///
@@ -37,14 +37,15 @@ import "./interface/concentrated-liquidity/INonfungiblePositionManager.sol";
 /// Consequences that shape the rest of this contract:
 ///   * Deposits and withdrawals touch ONLY the buffer, so they never enter the gauge, never
 ///     forfeit, and never restart the window.
-///   * `getReward()` does not move the gauge's `depositTimestamp` (verified on-chain), so
-///     compounding is free of clock effects — it only has to wait out the window to avoid the
-///     forfeit itself.
+///   * `claimEmissions()` does not move the gauge's per-tokenId `depositBlock`, so compounding is
+///     free of clock effects — it only has to wait out the window to avoid the forfeit itself. The
+///     window is per tokenId, so the never-staked buffer has none.
 ///   * Every operation that unstakes DOES restart the window, so all of them are gated on being
 ///     outside it, and each takes the opportunity to re-split to the target ratio.
 ///   * A withdrawal larger than the buffer is the one exception: it is allowed to unstake and eat
-///     the forfeit, because a vault that can refuse withdrawals is worse than one that loses a few
-///     minutes of emissions. At the ~300s windows in practice that cost is negligible.
+///     the forfeit, because a vault that can refuse withdrawals is worse than one that loses one
+///     window's emissions. At the 7–150 block windows in practice that cost is small.
+///   * The window is counted in BLOCKS, and so is the safety margin added to it.
 contract CLVaultV2 is ERC20Upgradeable, ERC721HolderUpgradeable, IUpgradeSource, ControllableInit, CLVaultV2Storage {
   using SafeERC20Upgradeable for IERC20Upgradeable;
 
@@ -75,7 +76,7 @@ contract CLVaultV2 is ERC20Upgradeable, ERC721HolderUpgradeable, IUpgradeSource,
   event Withdraw(address indexed sender, address indexed receiver, uint256 amount0, uint256 amount1, uint256 shares);
   /// @notice Emitted when a withdrawal was larger than the buffer and had to unstake inside the
   /// forfeit window. `liquidityFromStaked` is how much had to come out of the gauge position.
-  event ForcedUnstake(uint256 liquidityFromStaked, uint256 stakeWindowEnd, uint256 timestamp);
+  event ForcedUnstake(uint256 liquidityFromStaked, uint256 stakeWindowEnd, uint256 blockNumber);
   event StakeRatioRebalanced(uint256 stakedLiquidity, uint256 bufferLiquidity, uint256 stakedBps);
   event StakeConfigUpdated(uint256 targetStakedBps, uint256 bandBps, uint256 windowSafety);
   event BufferPositionSet(uint256 bufferPosId);
@@ -379,17 +380,20 @@ contract CLVaultV2 is ERC20Upgradeable, ERC721HolderUpgradeable, IUpgradeSource,
     return _stakeRatioBandBps();
   }
 
-  /// @notice End of the gauge's forfeit window for the staked position, plus the safety margin.
-  /// Reads `minStakeTime` live from the gauge factory: it is governance-mutable upstream (300s
-  /// today, 604800s maximum) so it must never be cached or assumed.
+  /// @notice Block at which the staked position clears the gauge's forfeit window, plus the safety
+  /// margin. The strategy reads the window live: it is mutable upstream (7–150 blocks today, 90000
+  /// maximum, retroactive) so it must never be cached or assumed. Saturates rather than overflowing,
+  /// because the strategy reports `type(uint256).max` when it cannot read the window.
   function stakeWindowEnd() public view returns (uint256) {
     address s = _strategy();
     if (s == address(0)) return 0;
-    return IStrategyCLV2(s).stakeWindowEnd() + _stakeWindowSafety();
+    uint256 end = IStrategyCLV2(s).stakeWindowEnd();
+    uint256 safety = _stakeWindowSafety();
+    return end > type(uint256).max - safety ? type(uint256).max : end + safety;
   }
 
   function isOutsideStakeWindow() public view returns (bool) {
-    return block.timestamp >= stakeWindowEnd();
+    return block.number >= stakeWindowEnd();
   }
 
   /// @notice Share price on the same idle-inclusive basis as the mint and the payout, matching V1.
@@ -583,7 +587,7 @@ contract CLVaultV2 is ERC20Upgradeable, ERC721HolderUpgradeable, IUpgradeSource,
 
     IStrategyCLV2(s).unstake(false); // leaves both NFTs with the strategy
     _moveLiquidity(_posId(), _bufferPosId(), liquidity);
-    if (block.timestamp < end) emit ForcedUnstake(liquidity, end, block.timestamp);
+    if (block.number < end) emit ForcedUnstake(liquidity, end, block.number);
   }
 
   /// @notice Re-split total liquidity between the two positions to hit `targetStakedBps`. Assumes
@@ -711,8 +715,8 @@ contract CLVaultV2 is ERC20Upgradeable, ERC721HolderUpgradeable, IUpgradeSource,
   ///
   /// Gated on the forfeit window because it has to unstake. That is the unavoidable cost of this
   /// gauge design: when the price leaves the range mid-window the choice is to forfeit accrued
-  /// AERO or to sit out of range until the window passes. At the ~300s windows seen in practice
-  /// waiting is nearly free, which is why this reverts rather than forfeiting — unlike a
+  /// AERO or to sit out of range until the window passes. At the 7–150 block windows seen in
+  /// practice waiting is cheap, which is why this reverts rather than forfeiting — unlike a
   /// withdrawal, a rebalance can always wait.
   function rebalanceCurrentTick(uint256 _newPosWidth)
     external
@@ -992,7 +996,8 @@ interface IStrategyCLV2 {
     uint256 maxTwapDeviationBps
   ) external returns (uint256 newStaked, uint256 newBuffer);
 
-  /// @notice depositTimestamp(stakedPosId) + the gauge's live minStakeTime, or 0 when unstaked.
+  /// @notice depositBlock(stakedPosId) + the gauge's live minStakeBlocks; 0 when unstaked or the
+  /// penalty is off; type(uint256).max when the window cannot be read.
   function stakeWindowEnd() external view returns (uint256);
 
   function isOutsideStakeWindow() external view returns (bool);
