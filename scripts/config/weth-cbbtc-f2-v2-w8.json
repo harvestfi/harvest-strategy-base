@@ -1,0 +1,41 @@
+{
+  "name": "weth-cbbtc-f2-v2-w8",
+  "addressesPath": "test/test-config.js",
+  "_comment_pool": "WETH/cbBTC tickSpacing=10 on the SECOND Slipstream deployment (F2). Pool 0x42d4a22CaD0F5a49681a5715cE994Af73A43B76b, gauge 0x61E0B10423a0009C3f83ab4313813d29437d0817. This is the pool all 83 V2 tests run against and the one scripts 19/20 were rehearsed on end-to-end, which is why it is the recommended first live V2 deployment rather than USDC/AAPLc (which cannot be fork-tested at all).",
+  "_comment_width": "targetWidth=8 -> 80 ticks -> 0.80% span, matching the test fixture exactly.",
+  "_comment_seed": "Mint BOTH seeds with scripts/19-mint-cl-seed-v2.js (CL_WIDTH=8, CL_TARGET_BPS=8000), then paste the two ids below. They must share one range; initializeVault enforces it.",
+  "posId": "REPLACE_WITH_STAKED_POS_ID",
+  "bufferPosId": "REPLACE_WITH_BUFFER_POS_ID",
+  "posManager": "0xe1f8cd9AC4e4A65F54f38a5CdAfCA44f6dD68b53",
+  "pool": "0x42d4a22CaD0F5a49681a5715cE994Af73A43B76b",
+  "gauge": "0x61E0B10423a0009C3f83ab4313813d29437d0817",
+  "targetWidth": "8",
+  "rebalanceHelper": "0x74a343dECf3b4578B07D0F7b7577aB2f3c4762b2",
+  "stake": {
+    "targetStakedBps": 8000,
+    "bandBps": 1000,
+    "windowSafety": 30
+  },
+  "rebalance": {
+    "deviation": 0,
+    "cooldown": 5,
+    "executor": "0xaba4ba582E04B729ABCd2Bae0d7c14fe21C9F510",
+    "maxSwapBps": 10000,
+    "maxSlippageBps": 100,
+    "twapWindow": 120,
+    "maxTwapDeviationBps": 200
+  },
+  "strategy": {
+    "minRewardToCompound": "10000000000000000",
+    "rewardToken": "0x940181a94A35A4569E4529A3CDfB74e38FD98631"
+  },
+  "_comment_wrappers": "Two CLWrapperV2 instances, identical ABI to V1's CLWrapper (verified: 40 entries, no differences). previewSafetyBps is display-only now \u2014 deposit/redeem no longer use the preview as an execution minimum \u2014 but it is raised above the 25bps default so the ERC4626 previews stay conservative.",
+  "wrappers": {
+    "deploy": true,
+    "previewSafetyBps": 100
+  },
+  "useSetupStorage": true,
+  "finalizeStorage": true,
+  "verify": true,
+  "snapshotPath": "scripts/deployments/cl/weth-cbbtc-f2-v2-w8.json"
+}
