@@ -18,6 +18,8 @@ interface INonfungiblePositionManager is
     IERC721Metadata,
     IERC721Enumerable
 {
+    function factory() external view returns (address);
+
     /// @notice Returns the position information associated with a given token ID.
     /// @dev Throws if the token ID is not valid.
     /// @param tokenId The ID of the token that represents the position
