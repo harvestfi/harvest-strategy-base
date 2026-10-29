@@ -18,22 +18,14 @@ const IPool = artifacts.require("contracts/base/interface/concentrated-liquidity
 const IERC20 = artifacts.require("IERC20Upgradeable");
 const IERC721 = artifacts.require("IERC721");
 
-const NPM2 = "0xe1f8cd9AC4e4A65F54f38a5CdAfCA44f6dD68b53";
-const POOL = "0x42d4a22CaD0F5a49681a5715cE994Af73A43B76b";
-const GAUGE = "0x61E0B10423a0009C3f83ab4313813d29437d0817";
-const FACTORY = "0x385293CaE378C813F16f0C1334d774AdDDf56AbB";
-const ADMIN = "0xE6A41fE61E7a1996B59d508661e3f524d6A32075";
-const AERO = "0x940181a94A35A4569E4529A3CDfB74e38FD98631";
-const WETH = "0x4200000000000000000000000000000000000006";
-const CBBTC = "0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf";
-const HELPER = "0x74a343dECf3b4578B07D0F7b7577aB2f3c4762b2";
-const TS = 10, WIDTH = 8, WINDOW = 300;
-const TARGET_BPS = 8000, BAND_BPS = 1000, SAFETY = 30;
+const V3 = require("../utilities/aero-v3-fixture.js");
+const { NPM, POOL, GAUGE, WHALE, AERO, AERO_WHALE, WETH, CBBTC, HELPER, TS, WINDOW } = V3;
+const WIDTH = 8;
+const TARGET_BPS = 8000, BAND_BPS = 1000, SAFETY = 15; // window and safety are in BLOCKS
+V3.disableConfirmationListeners(VaultProxy, StrategyProxy, CLVaultV2, CLRebalanceLibV2, Strategy, IPosManager, IPool, IERC20, IERC721);
 const TIMELOCK = 43200; // Controller.nextImplementationDelay(), 12h
 const BN = web3.utils.toBN;
 
-const FACTORY_ABI = [{ name: "setMinStakeTime", type: "function", stateMutability: "nonpayable",
-  inputs: [{ name: "p", type: "address" }, { name: "v", type: "uint256" }], outputs: [] }];
 
 async function expectRevert(fn, needle, label) {
   let threw = false, msg = "";
@@ -45,10 +37,11 @@ async function expectRevert(fn, needle, label) {
 
 describe("CLVaultV2 — migration and upgrade paths", function () {
   this.timeout(3600000);
-  let gov, user, vault, strategy, npm, nft, t0, t1, factory, linked = false;
+  let gov, user, vault, strategy, npm, nft, t0, t1, linked = false, snap;
 
   const evmNow = async () => Number((await web3.eth.getBlock("latest")).timestamp);
-  const advance = async s => { await hre.network.provider.send("evm_increaseTime", [s]); await hre.network.provider.send("evm_mine"); };
+  // Seconds, as 2s Base blocks: the 12h timelock elapses and so does the block-based window.
+  const advance = async s => V3.mine(Math.ceil(s / 2));
 
   async function newStrategy() {
     const sImpl = await Strategy.new({ from: gov });
@@ -58,22 +51,23 @@ describe("CLVaultV2 — migration and upgrade paths", function () {
     return s;
   }
 
-  beforeEach(async () => {
+  // Built once and snapshotted: rebuilding it per test would pull 2 cbBTC from the whale each time.
+  before(async () => {
     const acc = await web3.eth.getAccounts();
     gov = addresses.Governance; user = acc[5];
-    await impersonates([gov, POOL, ADMIN]);
-    for (const a of [gov, user, POOL, ADMIN]) {
+    await impersonates([gov, WHALE]);
+    for (const a of [gov, user, WHALE]) {
       await hre.network.provider.request({ method: "hardhat_setBalance", params: [a, "0x21E19E0C9BAB2400000"] });
     }
     t0 = await IERC20.at(WETH); t1 = await IERC20.at(CBBTC);
-    npm = await IPosManager.at(NPM2); nft = await IERC721.at(NPM2);
-    factory = new web3.eth.Contract(FACTORY_ABI, FACTORY);
-    await factory.methods.setMinStakeTime(POOL, WINDOW).send({ from: ADMIN, gas: 500000 });
+    npm = await IPosManager.at(NPM); nft = await IERC721.at(NPM);
+    await V3.setWindow(WINDOW);
+    await V3.registerAeroV3Routes();
 
-    await t0.transfer(gov, web3.utils.toWei("40"), { from: POOL });
-    await t1.transfer(gov, "200000000", { from: POOL });
-    await t0.approve(NPM2, web3.utils.toWei("40"), { from: gov });
-    await t1.approve(NPM2, "200000000", { from: gov });
+    await t0.transfer(gov, web3.utils.toWei("40"), { from: WHALE });
+    await t1.transfer(gov, "200000000", { from: WHALE });
+    await t0.approve(NPM, web3.utils.toWei("40"), { from: gov });
+    await t1.approve(NPM, "200000000", { from: gov });
 
     const tick = parseInt((await (await IPool.at(POOL)).slot0())[1].toString(), 10);
     const lower = (Math.floor(tick / TS) - WIDTH / 2) * TS;
@@ -93,7 +87,7 @@ describe("CLVaultV2 — migration and upgrade paths", function () {
     vault = await CLVaultV2.at(proxy.address);
     await nft.approve(vault.address, stakedId, { from: gov });
     await nft.approve(vault.address, bufferId, { from: gov });
-    await vault.initializeVault(addresses.Storage, stakedId, bufferId, NPM2, WIDTH, TARGET_BPS, BAND_BPS, SAFETY, { from: gov });
+    await vault.initializeVault(addresses.Storage, stakedId, bufferId, NPM, WIDTH, TARGET_BPS, BAND_BPS, SAFETY, { from: gov });
     await vault.setRebalanceHelper(HELPER, { from: gov });
     await vault.setRebalanceSafetyConfig(10000, 100, 120, 200, { from: gov });
     await vault.setRebalanceConfig(0, 5, gov, { from: gov });
@@ -101,28 +95,34 @@ describe("CLVaultV2 — migration and upgrade paths", function () {
     strategy = await newStrategy();
     await vault.setStrategy(strategy.address, { from: gov });   // first set is free
     await vault.restakePosition({ from: gov });
+    snap = await hre.network.provider.send("evm_snapshot");
+  });
+
+  beforeEach(async () => {
+    await hre.network.provider.send("evm_revert", [snap]);
+    snap = await hre.network.provider.send("evm_snapshot");
   });
 
   // ==========================================================================================
   describe("strategy migration", function () {
     it("a second setStrategy is refused without an announcement", async () => {
       const next = await newStrategy();
-      await expectRevert(() => vault.setStrategy(next.address, { from: gov }), "ErrTimelock|revert", "unannounced swap");
+      await expectRevert(() => vault.setStrategy(next.address, { from: gov }), "ErrTimelock", "unannounced swap");
     });
 
     it("setStrategy is refused before the timelock elapses", async () => {
       const next = await newStrategy();
       await vault.announceStrategyUpdate(next.address, { from: gov });
-      await expectRevert(() => vault.setStrategy(next.address, { from: gov }), "ErrTimelock|revert", "swap before delay");
+      await expectRevert(() => vault.setStrategy(next.address, { from: gov }), "ErrTimelock", "swap before delay");
       await advance(TIMELOCK - 600);
-      await expectRevert(() => vault.setStrategy(next.address, { from: gov }), "ErrTimelock|revert", "swap just before delay");
+      await expectRevert(() => vault.setStrategy(next.address, { from: gov }), "ErrTimelock", "swap just before delay");
     });
 
     it("a strategy announced for A cannot be swapped for B", async () => {
       const a = await newStrategy(), b = await newStrategy();
       await vault.announceStrategyUpdate(a.address, { from: gov });
       await advance(TIMELOCK + 60);
-      await expectRevert(() => vault.setStrategy(b.address, { from: gov }), "ErrTimelock|revert", "bait and switch");
+      await expectRevert(() => vault.setStrategy(b.address, { from: gov }), "ErrTimelock", "bait and switch");
     });
 
     it("a strategy pointing at a different vault is rejected", async () => {
@@ -134,7 +134,7 @@ describe("CLVaultV2 — migration and upgrade paths", function () {
       await f.initializeBaseStrategy(addresses.Storage, addresses.Governance, GAUGE, AERO, { from: gov });
       await vault.announceStrategyUpdate(f.address, { from: gov });
       await advance(TIMELOCK + 60);
-      await expectRevert(() => vault.setStrategy(f.address, { from: gov }), "ErrVault|revert", "foreign vault backlink");
+      await expectRevert(() => vault.setStrategy(f.address, { from: gov }), "ErrVault", "foreign vault backlink");
     });
 
     it("migration moves BOTH positions together and preserves all accounting", async () => {
@@ -147,7 +147,11 @@ describe("CLVaultV2 — migration and upgrade paths", function () {
       const next = await newStrategy();
       await vault.announceStrategyUpdate(next.address, { from: gov });
       await advance(TIMELOCK + 60);
-      await vault.setStrategy(next.address, { from: gov });
+      const rc = await vault.setStrategy(next.address, { from: gov });
+      // Outside the window the outgoing strategy claims and compounds on its way out (12h of real
+      // emissions on V3), so liquidity may grow, but only by exactly what it reports compounding.
+      const compounded = (await strategy.getPastEvents("CompoundedIntoBuffer", { fromBlock: rc.receipt.blockNumber, toBlock: rc.receipt.blockNumber }))
+        .reduce((acc, e) => acc.add(BN(e.returnValues.liquidity)), BN(0));
 
       assert.equal((await nft.ownerOf(stakedId)).toLowerCase(), next.address.toLowerCase(), "staked NFT must move");
       assert.equal((await nft.ownerOf(bufferId)).toLowerCase(), next.address.toLowerCase(), "buffer NFT must move");
@@ -159,8 +163,9 @@ describe("CLVaultV2 — migration and upgrade paths", function () {
 
       const totalAfter = BN(await vault.totalLiquidity());
       console.log(`      totalL ${totalBefore} -> ${totalAfter}   pps ${ppsBefore} -> ${(await vault.getPricePerFullShare()).toString()}`);
-      assert.equal(totalAfter.eq(totalBefore), true, "migration must not change liquidity");
-      assert.equal(BN(await vault.getPricePerFullShare()).eq(ppsBefore), true, "migration must not move price per share");
+      console.log(`      compounded on the way out: L=${compounded}`);
+      assert.equal(totalAfter.eq(totalBefore.add(compounded)), true, "migration must not change liquidity beyond the exit compound");
+      assert.equal(BN(await vault.getPricePerFullShare()).gte(ppsBefore), true, "migration must not lower price per share");
       assert.equal(BN(await vault.totalSupply()).eq(supplyBefore), true, "migration must not change supply");
       // The old strategy must be left holding nothing.
       assert.equal(BN(await nft.balanceOf(strategy.address)).isZero(), true, "old strategy must retain no positions");
@@ -175,8 +180,8 @@ describe("CLVaultV2 — migration and upgrade paths", function () {
       await vault.restakePosition({ from: gov });
       assert.equal((await nft.ownerOf(await vault.posId())).toLowerCase(), GAUGE.toLowerCase(), "new strategy must be able to stake");
 
-      await t0.transfer(user, web3.utils.toWei("1"), { from: POOL });
-      await t1.transfer(user, "5000000", { from: POOL });
+      await t0.transfer(user, web3.utils.toWei("1"), { from: WHALE });
+      await t1.transfer(user, "5000000", { from: WHALE });
       await t0.approve(vault.address, web3.utils.toWei("1"), { from: user });
       await t1.approve(vault.address, "5000000", { from: user });
       const bufBefore = BN(await vault.bufferLiquidity());
@@ -219,11 +224,11 @@ describe("CLVaultV2 — migration and upgrade paths", function () {
       // behind. AERO and both pool tokens are all unsalvagable, so anything stranded here is lost
       // for good — governance has no recovery path.
       const aero = await IERC20.at(AERO);
-      await impersonates([GAUGE]);
-      await hre.network.provider.request({ method: "hardhat_setBalance", params: [GAUGE, "0x21E19E0C9BAB2400000"] });
-      await aero.transfer(strategy.address, web3.utils.toWei("5"), { from: GAUGE });
-      await t0.transfer(strategy.address, web3.utils.toWei("0.05"), { from: POOL });
-      await t1.transfer(strategy.address, "250000", { from: POOL });
+      // A V3 gauge mints on claim and holds no AERO, so take it from an AERO pool instead.
+      await V3.fund(AERO_WHALE);
+      await aero.transfer(strategy.address, web3.utils.toWei("5"), { from: AERO_WHALE });
+      await t0.transfer(strategy.address, web3.utils.toWei("0.05"), { from: WHALE });
+      await t1.transfer(strategy.address, "250000", { from: WHALE });
       const seededAero = BN(await aero.balanceOf(strategy.address));
       assert.equal(seededAero.gt(BN(0)), true, "test premise: old strategy must hold rewards");
 
@@ -275,8 +280,8 @@ describe("CLVaultV2 — migration and upgrade paths", function () {
     it("upgrade preserves EVERY V2 storage field and all user balances", async () => {
       // The V2 slots are appended after V1's; an upgrade that mis-lays them would not revert, it
       // would silently corrupt the buffer id or the target ratio and mis-price every share.
-      await t0.transfer(user, web3.utils.toWei("1"), { from: POOL });
-      await t1.transfer(user, "5000000", { from: POOL });
+      await t0.transfer(user, web3.utils.toWei("1"), { from: WHALE });
+      await t1.transfer(user, "5000000", { from: WHALE });
       await t0.approve(vault.address, web3.utils.toWei("1"), { from: user });
       await t1.approve(vault.address, "5000000", { from: user });
       await vault.deposit(web3.utils.toWei("1"), "5000000", 0, user, { from: user });
@@ -334,8 +339,8 @@ describe("CLVaultV2 — migration and upgrade paths", function () {
       await advance(TIMELOCK + 60);
       await (await VaultProxy.at(vault.address)).upgrade({ from: gov });
 
-      await t0.transfer(user, web3.utils.toWei("1"), { from: POOL });
-      await t1.transfer(user, "5000000", { from: POOL });
+      await t0.transfer(user, web3.utils.toWei("1"), { from: WHALE });
+      await t1.transfer(user, "5000000", { from: WHALE });
       await t0.approve(vault.address, web3.utils.toWei("1"), { from: user });
       await t1.approve(vault.address, "5000000", { from: user });
       await vault.deposit(web3.utils.toWei("1"), "5000000", 0, user, { from: user });

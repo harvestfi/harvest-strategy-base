@@ -25,23 +25,19 @@ const IPool = artifacts.require("contracts/base/interface/concentrated-liquidity
 const IERC20 = artifacts.require("IERC20Upgradeable");
 const IERC721 = artifacts.require("IERC721");
 
-const NPM2 = "0xe1f8cd9AC4e4A65F54f38a5CdAfCA44f6dD68b53";
-const POOL = "0x42d4a22CaD0F5a49681a5715cE994Af73A43B76b";
-const GAUGE = "0x61E0B10423a0009C3f83ab4313813d29437d0817";
-const FACTORY = "0x385293CaE378C813F16f0C1334d774AdDDf56AbB";
-const ADMIN = "0xE6A41fE61E7a1996B59d508661e3f524d6A32075";
-const AERO = "0x940181a94A35A4569E4529A3CDfB74e38FD98631";
-const WETH = "0x4200000000000000000000000000000000000006";
-const CBBTC = "0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf";
-const HELPER = "0x74a343dECf3b4578B07D0F7b7577aB2f3c4762b2";
-const TS = 10, WIDTH = 8, WINDOW = 300;
-const TARGET_BPS = 8000, BAND_BPS = 1000, SAFETY = 30;
+const V3 = require("../utilities/aero-v3-fixture.js");
+const { NPM, POOL, GAUGE, WHALE, AERO, AERO_WHALE, WETH, CBBTC, HELPER, TS, WINDOW } = V3;
+const WIDTH = 8;
+const TARGET_BPS = 8000, BAND_BPS = 1000, SAFETY = 15; // window and safety are in BLOCKS
+// Every price push below is bounded by its sqrtPriceLimit; the amount only has to be enough to reach
+// it in the V3 pool, which is ~30x deeper than the F2 pool these pushes were sized for.
+const PUSH_WETH = "60000";
+const PUSH_CBBTC = "300000000000"; // 3,000 cbBTC
+V3.disableConfirmationListeners(VaultProxy, StrategyProxy, CLVaultV2, CLRebalanceLibV2, Strategy, PriceMover, MockPartialUL, MockCountingUL, MockLossyUL, ICLRebalanceHelper, MockTickMath, IPosManager, IPool, IERC20, IERC721);
 const BN = web3.utils.toBN;
 const MIN_SQRT = "4295128740";
 const MAX_SQRT = "1461446703485210103287273052203988822378723970341";
 
-const FACTORY_ABI = [{ name: "setMinStakeTime", type: "function", stateMutability: "nonpayable",
-  inputs: [{ name: "p", type: "address" }, { name: "v", type: "uint256" }], outputs: [] }];
 const CONTROLLER_ABI = [
   { name: "doHardWork", type: "function", stateMutability: "nonpayable", inputs: [{ name: "v", type: "address" }], outputs: [] },
   { name: "addHardWorker", type: "function", stateMutability: "nonpayable", inputs: [{ name: "w", type: "address" }], outputs: [] },
@@ -53,7 +49,7 @@ const CONTROLLER_ABI = [
 let linkedLibAddr = null;
 
 async function buildVault(gov) {
-  const npm = await IPosManager.at(NPM2), nft = await IERC721.at(NPM2);
+  const npm = await IPosManager.at(NPM), nft = await IERC721.at(NPM);
   const t0 = await IERC20.at(WETH), t1 = await IERC20.at(CBBTC);
   const now = Number((await web3.eth.getBlock("latest")).timestamp);
   const tick = parseInt((await (await IPool.at(POOL)).slot0())[1].toString(), 10);
@@ -67,9 +63,8 @@ async function buildVault(gov) {
   };
   const stakedId = await mint(web3.utils.toWei("8"), "40000000");
   const bufferId = await mint(web3.utils.toWei("2"), "10000000");
-  // Truffle bakes the library address into the artifact and refuses a second link, but every test
-  // resets the fork, which wipes the deployed library. The redeploy is nonce-deterministic so it
-  // lands on the same address -- ASSERT that, because a delegatecall into a codeless address
+  // Truffle bakes the library address into the artifact and refuses a second link. The fixture is
+  // now built once and snapshotted, but keep the guard: a delegatecall into a codeless address
   // SUCCEEDS silently and would turn every moveLiquidity into an invisible no-op that all of these
   // tests would still pass.
   const lib = await CLRebalanceLibV2.new({ from: gov });
@@ -81,7 +76,7 @@ async function buildVault(gov) {
   const vault = await CLVaultV2.at(proxy.address);
   await nft.approve(vault.address, stakedId, { from: gov });
   await nft.approve(vault.address, bufferId, { from: gov });
-  await vault.initializeVault(addresses.Storage, stakedId, bufferId, NPM2, WIDTH, TARGET_BPS, BAND_BPS, SAFETY, { from: gov });
+  await vault.initializeVault(addresses.Storage, stakedId, bufferId, NPM, WIDTH, TARGET_BPS, BAND_BPS, SAFETY, { from: gov });
   await vault.setRebalanceHelper(HELPER, { from: gov });
   await vault.setRebalanceSafetyConfig(10000, 100, 120, 200, { from: gov });
   await vault.setRebalanceConfig(0, 5, gov, { from: gov });
@@ -97,9 +92,9 @@ async function buildVault(gov) {
 
 describe("CLVaultV2 — edge coverage", function () {
   this.timeout(3600000);
-  let gov, u1, u2, u3, ctx, factory, controller;
+  let gov, u1, u2, u3, ctx, controller, snap;
   const evmNow = async () => Number((await web3.eth.getBlock("latest")).timestamp);
-  const advance = async s => { await hre.network.provider.send("evm_increaseTime", [s]); await hre.network.provider.send("evm_mine"); };
+  const advance = V3.mine; // blocks, at 2s each
   const poolTick = async () => parseInt((await (await IPool.at(POOL)).slot0())[1].toString(), 10);
 
   // Push the pool decisively past one edge of the vault's range.
@@ -110,45 +105,47 @@ describe("CLVaultV2 — edge coverage", function () {
     const funder = acc[8];
     await hre.network.provider.request({ method: "hardhat_setBalance", params: [funder, "0x152D02C7E14AF6800000"] });
     if (down) {
-      await web3.eth.sendTransaction({ from: funder, to: WETH, value: web3.utils.toWei("600"), gas: 200000 });
-      await ctx.t0.transfer(mover.address, web3.utils.toWei("600"), { from: funder });
+      await web3.eth.sendTransaction({ from: funder, to: WETH, value: web3.utils.toWei(PUSH_WETH), gas: 200000 });
+      await ctx.t0.transfer(mover.address, web3.utils.toWei(PUSH_WETH), { from: funder });
       const target = Math.floor((ctx.lower - 30) / TS) * TS;
-      await mover.move(POOL, true, web3.utils.toWei("600"), (await tm.getSqrtRatioAtTick(target)).toString(), { from: gov });
+      await mover.move(POOL, true, web3.utils.toWei(PUSH_WETH), (await tm.getSqrtRatioAtTick(target)).toString(), { from: gov });
     } else {
-      await impersonates([POOL]);
-      const have = BN(await ctx.t1.balanceOf(POOL));
-      const amt = have.div(BN(4)).toString();
-      await ctx.t1.transfer(mover.address, amt, { from: POOL });
+      const amt = PUSH_CBBTC;
+      await V3.dealCbBTC(mover.address, amt);
       const target = Math.ceil((ctx.upper + 30) / TS) * TS;
       await mover.move(POOL, false, amt, (await tm.getSqrtRatioAtTick(target)).toString(), { from: gov });
     }
     return poolTick();
   }
 
-  beforeEach(async () => {
-    await hre.network.provider.request({ method: "hardhat_reset", params: [{
-      forking: { jsonRpcUrl: hre.network.config.forking.url, blockNumber: hre.network.config.forking.blockNumber },
-    }] });
+  // Built once and snapshotted per test (it used to hardhat_reset the fork for every test).
+  before(async () => {
     const acc = await web3.eth.getAccounts();
     gov = addresses.Governance; u1 = acc[5]; u2 = acc[6]; u3 = acc[7];
-    await impersonates([gov, POOL, ADMIN]);
-    for (const a of [gov, u1, u2, u3, POOL, ADMIN, acc[8]]) {
+    await impersonates([gov, WHALE]);
+    for (const a of [gov, u1, u2, u3, WHALE, acc[8]]) {
       await hre.network.provider.request({ method: "hardhat_setBalance", params: [a, "0x152D02C7E14AF6800000"] });
     }
-    factory = new web3.eth.Contract(FACTORY_ABI, FACTORY);
     controller = new web3.eth.Contract(CONTROLLER_ABI, addresses.Controller);
-    await factory.methods.setMinStakeTime(POOL, WINDOW).send({ from: ADMIN, gas: 500000 });
+    await V3.setWindow(WINDOW);
+    await V3.registerAeroV3Routes();
     const t0 = await IERC20.at(WETH), t1 = await IERC20.at(CBBTC);
-    await t0.transfer(gov, web3.utils.toWei("40"), { from: POOL });
-    await t1.transfer(gov, "200000000", { from: POOL });
-    await t0.approve(NPM2, web3.utils.toWei("40"), { from: gov });
-    await t1.approve(NPM2, "200000000", { from: gov });
+    await t0.transfer(gov, web3.utils.toWei("40"), { from: WHALE });
+    await t1.transfer(gov, "200000000", { from: WHALE });
+    await t0.approve(NPM, web3.utils.toWei("40"), { from: gov });
+    await t1.approve(NPM, "200000000", { from: gov });
     ctx = await buildVault(gov);
+    snap = await hre.network.provider.send("evm_snapshot");
+  });
+
+  beforeEach(async () => {
+    await hre.network.provider.send("evm_revert", [snap]);
+    snap = await hre.network.provider.send("evm_snapshot");
   });
 
   async function fund(who, w, c) {
-    await ctx.t0.transfer(who, web3.utils.toWei(w), { from: POOL });
-    await ctx.t1.transfer(who, c, { from: POOL });
+    await ctx.t0.transfer(who, web3.utils.toWei(w), { from: WHALE });
+    await ctx.t1.transfer(who, c, { from: WHALE });
     await ctx.t0.approve(ctx.vault.address, web3.utils.toWei(w), { from: who });
     await ctx.t1.approve(ctx.vault.address, c, { from: who });
   }
@@ -186,10 +183,10 @@ describe("CLVaultV2 — edge coverage", function () {
       const mover = await PriceMover.new({ from: gov });
       const acc = await web3.eth.getAccounts();
       await hre.network.provider.request({ method: "hardhat_setBalance", params: [acc[8], "0x152D02C7E14AF6800000"] });
-      await web3.eth.sendTransaction({ from: acc[8], to: WETH, value: web3.utils.toWei("600"), gas: 200000 });
-      await ctx.t0.transfer(mover.address, web3.utils.toWei("600"), { from: acc[8] });
+      await web3.eth.sendTransaction({ from: acc[8], to: WETH, value: web3.utils.toWei(PUSH_WETH), gas: 200000 });
+      await ctx.t0.transfer(mover.address, web3.utils.toWei(PUSH_WETH), { from: acc[8] });
       const target = BN((await tm.getSqrtRatioAtTick(ctx.lower)).toString()).add(BN(1));
-      await mover.move(POOL, true, web3.utils.toWei("600"), target.toString(), { from: gov });
+      await mover.move(POOL, true, web3.utils.toWei(PUSH_WETH), target.toString(), { from: gov });
 
       const slot0 = await (await IPool.at(POOL)).slot0();
       const sqrtNow = BN(slot0[0].toString());
@@ -263,9 +260,9 @@ describe("CLVaultV2 — edge coverage", function () {
       await controller.methods.setUniversalLiquidator(mock.address).send({ from: gov, gas: 500000 });
 
       const aero = await IERC20.at(AERO);
-      await impersonates([GAUGE]);
-      await hre.network.provider.request({ method: "hardhat_setBalance", params: [GAUGE, "0x21E19E0C9BAB2400000"] });
-      await aero.transfer(ctx.strategy.address, web3.utils.toWei("5"), { from: GAUGE }); // above the 0.01 gate
+      // A V3 gauge mints on claim and holds no AERO, so take it from an AERO pool instead.
+      await V3.fund(AERO_WHALE);
+      await aero.transfer(ctx.strategy.address, web3.utils.toWei("5"), { from: AERO_WHALE }); // above the 0.01 gate
       await advance(WINDOW + SAFETY + 60);
 
       const skippedBefore = BN(await ctx.strategy.swapSkippedCount());
@@ -282,7 +279,7 @@ describe("CLVaultV2 — edge coverage", function () {
 
       // And it must stay harvestable — a one-shot survival is not enough, since the dust that caused
       // the revert would otherwise still be there next cycle.
-      await aero.transfer(ctx.strategy.address, web3.utils.toWei("5"), { from: GAUGE });
+      await aero.transfer(ctx.strategy.address, web3.utils.toWei("5"), { from: AERO_WHALE });
       await advance(WINDOW + SAFETY + 60);
       await ctx.vault.doHardWork({ from: gov });
 
@@ -297,15 +294,15 @@ describe("CLVaultV2 — edge coverage", function () {
         const back = await PriceMover.new({ from: gov });
         const a2 = await web3.eth.getAccounts();
         await hre.network.provider.request({ method: "hardhat_setBalance", params: [a2[8], "0x152D02C7E14AF6800000"] });
-        await web3.eth.sendTransaction({ from: a2[8], to: WETH, value: web3.utils.toWei("400"), gas: 200000 });
-        await ctx.t0.transfer(back.address, web3.utils.toWei("400"), { from: a2[8] });
+        await web3.eth.sendTransaction({ from: a2[8], to: WETH, value: web3.utils.toWei(PUSH_WETH), gas: 200000 });
+        await ctx.t0.transfer(back.address, web3.utils.toWei(PUSH_WETH), { from: a2[8] });
         const mid = Math.floor((ctx.lower + ctx.upper) / 2 / TS) * TS;
-        await back.move(POOL, true, web3.utils.toWei("400"), (await tm2.getSqrtRatioAtTick(mid)).toString(), { from: gov });
+        await back.move(POOL, true, web3.utils.toWei(PUSH_WETH), (await tm2.getSqrtRatioAtTick(mid)).toString(), { from: gov });
         const t2 = parseInt((await (await IPool.at(POOL)).slot0())[1].toString(), 10);
         assert.equal(t2 >= ctx.lower && t2 < ctx.upper, true, `premise: spot must be back in range (tick ${t2})`);
       }
       const totalBefore = BN(await ctx.vault.totalLiquidity());
-      await aero.transfer(ctx.strategy.address, web3.utils.toWei("5"), { from: GAUGE });
+      await aero.transfer(ctx.strategy.address, web3.utils.toWei("5"), { from: AERO_WHALE });
       await advance(WINDOW + SAFETY + 60);
       await ctx.vault.doHardWork({ from: gov });
       console.log(`      after route repair: totalL ${totalBefore} -> ${(await ctx.vault.totalLiquidity()).toString()}`);
@@ -370,9 +367,9 @@ describe("CLVaultV2 — edge coverage", function () {
 
       await advance(WINDOW + SAFETY + 60);
       const aero = await IERC20.at(AERO);
-      await impersonates([GAUGE]);
-      await hre.network.provider.request({ method: "hardhat_setBalance", params: [GAUGE, "0x21E19E0C9BAB2400000"] });
-      await aero.transfer(ctx.strategy.address, web3.utils.toWei("5"), { from: GAUGE });
+      // A V3 gauge mints on claim and holds no AERO, so take it from an AERO pool instead.
+      await V3.fund(AERO_WHALE);
+      await aero.transfer(ctx.strategy.address, web3.utils.toWei("5"), { from: AERO_WHALE });
 
       const totalBefore = BN(await ctx.vault.totalLiquidity());
       await controller.methods.doHardWork(ctx.vault.address).send({ from: worker, gas: 8000000 });
@@ -447,8 +444,8 @@ describe("CLVaultV2 — edge coverage", function () {
       // found it, the difference came out of everyone else's pocket. That is exactly the thing an
       // exploit has to do, and it is checked around EVERY operation, not just at the end.
       const aero = await IERC20.at(AERO);
-      await impersonates([GAUGE]);
-      await hre.network.provider.request({ method: "hardhat_setBalance", params: [GAUGE, "0x21E19E0C9BAB2400000"] });
+      // A V3 gauge mints on claim and holds no AERO, so take it from an AERO pool instead.
+      await V3.fund(AERO_WHALE);
 
       const drops = [];
       let checked = 0;
@@ -477,7 +474,7 @@ describe("CLVaultV2 — edge coverage", function () {
           ctx.vault.deposit(web3.utils.toWei(amounts[i][0]), amounts[i][1], 0, users[i], { from: users[i] }));
         if (i === 1) {
           await advance(WINDOW + SAFETY + 60);
-          await aero.transfer(ctx.strategy.address, web3.utils.toWei("3"), { from: GAUGE });
+          await aero.transfer(ctx.strategy.address, web3.utils.toWei("3"), { from: AERO_WHALE });
           const tl = BN(await ctx.vault.totalLiquidity());
           await step("harvest", () => ctx.vault.doHardWork({ from: gov }));
           harvested = BN(await ctx.vault.totalLiquidity()).gt(tl);
@@ -611,7 +608,7 @@ describe("CLVaultV2 — edge coverage", function () {
       // survives even a 100%-of-supply redemption (salvage and sweepStrayToken both refuse the pool
       // tokens). Measured at 599bps of silent loss per round trip before the fix.
       await pushOutOfRange(true); // below range -> token1 cannot be folded into the position
-      await ctx.t1.transfer(ctx.strategy.address, "20000000", { from: POOL });
+      await ctx.t1.transfer(ctx.strategy.address, "20000000", { from: WHALE });
       const navBefore = BN(await ctx.vault.underlyingBalanceWithInvestment());
       const totalBefore = BN(await ctx.vault.totalLiquidity());
       const inflation = navBefore.sub(totalBefore).mul(BN(10000)).div(totalBefore);
@@ -644,7 +641,7 @@ describe("CLVaultV2 — edge coverage", function () {
       // vault, withdraw in the same transaction, and walk away with most of it. Permissionless,
       // flash-loanable, and it scales with TVL rather than with the seed.
       const donation = BN(web3.utils.toWei("1"));
-      await ctx.t0.transfer(ctx.vault.address, donation.toString(), { from: POOL });
+      await ctx.t0.transfer(ctx.vault.address, donation.toString(), { from: WHALE });
       const idleOnVault = BN(await ctx.t0.balanceOf(ctx.vault.address));
       assert.equal(idleOnVault.gte(donation), true, "test premise: the vault must hold idle");
 
@@ -684,11 +681,11 @@ describe("CLVaultV2 — edge coverage", function () {
       const tm = await MockTickMath.new({ from: gov });
       const acc = await web3.eth.getAccounts();
       await hre.network.provider.request({ method: "hardhat_setBalance", params: [acc[8], "0x152D02C7E14AF6800000"] });
-      await web3.eth.sendTransaction({ from: acc[8], to: WETH, value: web3.utils.toWei("400"), gas: 200000 });
-      await ctx.t0.transfer(mover.address, web3.utils.toWei("400"), { from: acc[8] });
+      await web3.eth.sendTransaction({ from: acc[8], to: WETH, value: web3.utils.toWei(PUSH_WETH), gas: 200000 });
+      await ctx.t0.transfer(mover.address, web3.utils.toWei(PUSH_WETH), { from: acc[8] });
       // Aim just inside the lower edge: the position then wants mostly token0.
       const target = ctx.lower + 8;
-      await mover.move(POOL, true, web3.utils.toWei("400"), (await tm.getSqrtRatioAtTick(target)).toString(), { from: gov });
+      await mover.move(POOL, true, web3.utils.toWei(PUSH_WETH), (await tm.getSqrtRatioAtTick(target)).toString(), { from: gov });
       const tick = parseInt((await (await IPool.at(POOL)).slot0())[1].toString(), 10);
       assert.equal(tick > ctx.lower && tick < ctx.upper, true, `premise: spot must be inside but off-centre (tick ${tick})`);
       const w = await ctx.vault.getCurrentTokenWeights();
@@ -698,9 +695,9 @@ describe("CLVaultV2 — edge coverage", function () {
         `premise: the required ratio must be lopsided, got ${w0bps}bps`);
 
       const aero = await IERC20.at(AERO);
-      await impersonates([GAUGE]);
-      await hre.network.provider.request({ method: "hardhat_setBalance", params: [GAUGE, "0x21E19E0C9BAB2400000"] });
-      await aero.transfer(ctx.strategy.address, web3.utils.toWei("30"), { from: GAUGE });
+      // A V3 gauge mints on claim and holds no AERO, so take it from an AERO pool instead.
+      await V3.fund(AERO_WHALE);
+      await aero.transfer(ctx.strategy.address, web3.utils.toWei("30"), { from: AERO_WHALE });
       await advance(WINDOW + SAFETY + 60);
 
       const liqBefore = BN(await ctx.vault.totalLiquidity());
@@ -709,13 +706,16 @@ describe("CLVaultV2 — edge coverage", function () {
       const left0 = BN(await ctx.t0.balanceOf(ctx.strategy.address));
       const left1 = BN(await ctx.t1.balanceOf(ctx.strategy.address));
       // What the position actually accepted, from the IncreaseLiquidity event.
-      const incTopic = web3.utils.keccak256("IncreaseLiquidity(uint256,uint128,uint256,uint256)");
+      // The V3 position manager's event also carries the range: (tokenId, liquidity, amount0,
+      // amount1, tickLower, tickUpper).
+      const incTopic = web3.utils.keccak256("IncreaseLiquidity(uint256,uint128,uint256,uint256,int24,int24)");
       const incLogs = (await web3.eth.getPastLogs({
-        fromBlock: rc.receipt.blockNumber, toBlock: rc.receipt.blockNumber, address: NPM2,
+        fromBlock: rc.receipt.blockNumber, toBlock: rc.receipt.blockNumber, address: NPM,
       })).filter(l => l.topics[0] === incTopic);
+      assert.equal(incLogs.length > 0, true, "test premise: the compound must emit IncreaseLiquidity");
       let dep0 = BN(0), dep1 = BN(0);
       for (const l of incLogs) {
-        const d = web3.eth.abi.decodeParameters(["uint128", "uint256", "uint256"], l.data);
+        const d = web3.eth.abi.decodeParameters(["uint128", "uint256", "uint256", "int24", "int24"], l.data);
         dep0 = dep0.add(BN(d[1])); dep1 = dep1.add(BN(d[2]));
       }
 
@@ -748,7 +748,7 @@ describe("CLVaultV2 — edge coverage", function () {
       await controller.methods.setUniversalLiquidator(lossy.address).send({ from: gov, gas: 500000 });
 
       // Idle that needs a fold: one-sided token0 the position cannot take alone at this price.
-      await ctx.t0.transfer(ctx.strategy.address, web3.utils.toWei("0.4"), { from: POOL });
+      await ctx.t0.transfer(ctx.strategy.address, web3.utils.toWei("0.4"), { from: WHALE });
       const idleBefore = BN(await ctx.t0.balanceOf(ctx.strategy.address));
       const skipsBefore = BN(await ctx.strategy.swapSkippedCount());
       assert.equal(idleBefore.gt(BN(0)), true, "test premise: there must be idle to fold");
@@ -797,7 +797,7 @@ describe("CLVaultV2 — edge coverage", function () {
       // Target relative to where the first push actually landed: a hardcoded tick can end up on
       // the wrong side of spot and the pool rejects the limit with 'SPL'.
       const midTick = parseInt((await (await IPool.at(POOL)).slot0())[1].toString(), 10);
-      await ctx.t1.transfer(mover.address, "40000000", { from: POOL });
+      await ctx.t1.transfer(mover.address, "40000000", { from: WHALE });
       await mover.move(POOL, false, "40000000", (await tm.getSqrtRatioAtTick(midTick + 25)).toString(), { from: gov });
 
       await advance(WINDOW + SAFETY + 60);
@@ -805,7 +805,7 @@ describe("CLVaultV2 — edge coverage", function () {
       // Collect(uint256 indexed tokenId, address recipient, uint256 amount0, uint256 amount1)
       const topic = web3.utils.keccak256("Collect(uint256,address,uint256,uint256)");
       const logs = await web3.eth.getPastLogs({
-        fromBlock: rc.receipt.blockNumber, toBlock: rc.receipt.blockNumber, address: NPM2,
+        fromBlock: rc.receipt.blockNumber, toBlock: rc.receipt.blockNumber, address: NPM,
       });
       const collects = logs.filter(
         l => l.topics[0] === topic && BN(l.topics[1]).eq(BN(bufferId)),
@@ -839,12 +839,12 @@ describe("CLVaultV2 — edge coverage", function () {
       // This lives in THIS suite, not the security suite, because that one shares one fork across
       // all its tests: running last there meant harvesting at the largest accumulated
       // evm_increaseTime, and the gauge's reward accounting then read enough forked storage to
-      // exhaust a 12GB heap. This suite resets the fork per test, so the harvest stays cheap.
+      // exhaust a 12GB heap. This suite reverts to a fresh snapshot per test, so the harvest stays cheap.
       const realUL = await controller.methods.universalLiquidator().call();
       const counter = await MockCountingUL.new(realUL, { from: gov });
       await controller.methods.setUniversalLiquidator(counter.address).send({ from: gov, gas: 500000 });
 
-      const makeIdle = async () => { await ctx.t0.transfer(ctx.strategy.address, web3.utils.toWei("0.05"), { from: POOL }); };
+      const makeIdle = async () => { await ctx.t0.transfer(ctx.strategy.address, web3.utils.toWei("0.05"), { from: WHALE }); };
 
       await ctx.strategy.setSell(false, { from: gov });
       await makeIdle();

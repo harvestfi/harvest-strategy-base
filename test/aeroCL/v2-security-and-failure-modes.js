@@ -18,27 +18,17 @@ const IERC20 = artifacts.require("IERC20Upgradeable");
 const IERC721 = artifacts.require("IERC721");
 const MockCountingUL = artifacts.require("MockCountingUL");
 
-const NPM2 = "0xe1f8cd9AC4e4A65F54f38a5CdAfCA44f6dD68b53";
-const POOL = "0x42d4a22CaD0F5a49681a5715cE994Af73A43B76b";
-const GAUGE = "0x61E0B10423a0009C3f83ab4313813d29437d0817";
-const FACTORY = "0x385293CaE378C813F16f0C1334d774AdDDf56AbB";
-const ADMIN = "0xE6A41fE61E7a1996B59d508661e3f524d6A32075";
-const AERO = "0x940181a94A35A4569E4529A3CDfB74e38FD98631";
-const WETH = "0x4200000000000000000000000000000000000006";
-const CBBTC = "0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf";
-const HELPER = "0x74a343dECf3b4578B07D0F7b7577aB2f3c4762b2";
-const TS = 10, WIDTH = 8, WINDOW = 300;
-const TARGET_BPS = 8000, BAND_BPS = 1000, SAFETY = 30;
+const V3 = require("../utilities/aero-v3-fixture.js");
+const { NPM, POOL, GAUGE, WHALE, AERO, AERO_WHALE, WETH, CBBTC, HELPER, TS, WINDOW } = V3;
+const WIDTH = 8;
+const TARGET_BPS = 8000, BAND_BPS = 1000, SAFETY = 15; // window and safety are in BLOCKS
+V3.disableConfirmationListeners(VaultProxy, StrategyProxy, CLVaultV2, CLRebalanceLibV2, Strategy, IPosManager, IPool, IERC20, IERC721, MockCountingUL);
 const BN = web3.utils.toBN;
 const CONTROLLER_ABI = [
   { name: "universalLiquidator", type: "function", stateMutability: "view", inputs: [], outputs: [{ name: "", type: "address" }] },
   { name: "setUniversalLiquidator", type: "function", stateMutability: "nonpayable", inputs: [{ name: "u", type: "address" }], outputs: [] },
 ];
 
-const FACTORY_ABI = [{ name: "setMinStakeTime", type: "function", stateMutability: "nonpayable",
-  inputs: [{ name: "p", type: "address" }, { name: "v", type: "uint256" }], outputs: [] }];
-const GAUGE_ABI = [{ name: "depositTimestamp", type: "function", stateMutability: "view",
-  inputs: [{ name: "t", type: "uint256" }], outputs: [{ name: "", type: "uint256" }] }];
 
 async function expectRevert(fn, needle, label) {
   let threw = false, msg = "";
@@ -52,36 +42,37 @@ async function expectRevert(fn, needle, label) {
 
 describe("CLVaultV2 — security and failure modes", function () {
   this.timeout(3600000);
-  let gov, user, attacker, vault, strategy, npm, nft, t0, t1, factory, gauge;
+  let gov, user, attacker, vault, strategy, npm, nft, t0, t1, gauge, snap;
   let linked = false;
 
   const evmNow = async () => Number((await web3.eth.getBlock("latest")).timestamp);
-  const advance = async s => { await hre.network.provider.send("evm_increaseTime", [s]); await hre.network.provider.send("evm_mine"); };
-  const depositTs = async () => Number(await gauge.methods.depositTimestamp(await vault.posId()).call());
+  const advance = V3.mine; // blocks, at 2s each
+  const depositTs = async () => Number(await gauge.methods.depositBlock(await vault.posId()).call());
   const fund = async (who, w, c) => {
-    await t0.transfer(who, web3.utils.toWei(w), { from: POOL });
-    await t1.transfer(who, c, { from: POOL });
+    await t0.transfer(who, web3.utils.toWei(w), { from: WHALE });
+    await t1.transfer(who, c, { from: WHALE });
     await t0.approve(vault.address, web3.utils.toWei(w), { from: who });
     await t1.approve(vault.address, c, { from: who });
   };
 
-  beforeEach(async () => {
+  // Built once and snapshotted: rebuilding it per test would pull 2 cbBTC from the whale each time.
+  before(async () => {
     const acc = await web3.eth.getAccounts();
     gov = addresses.Governance; user = acc[5]; attacker = acc[7];
-    await impersonates([gov, POOL, ADMIN]);
-    for (const a of [gov, user, attacker, POOL, ADMIN, acc[6]]) {
+    await impersonates([gov, WHALE]);
+    for (const a of [gov, user, attacker, WHALE, acc[6]]) {
       await hre.network.provider.request({ method: "hardhat_setBalance", params: [a, "0x21E19E0C9BAB2400000"] });
     }
     t0 = await IERC20.at(WETH); t1 = await IERC20.at(CBBTC);
-    npm = await IPosManager.at(NPM2); nft = await IERC721.at(NPM2);
-    factory = new web3.eth.Contract(FACTORY_ABI, FACTORY);
-    gauge = new web3.eth.Contract(GAUGE_ABI, GAUGE);
-    await factory.methods.setMinStakeTime(POOL, WINDOW).send({ from: ADMIN, gas: 500000 });
+    npm = await IPosManager.at(NPM); nft = await IERC721.at(NPM);
+    gauge = V3.gauge();
+    await V3.setWindow(WINDOW);
+    await V3.registerAeroV3Routes();
 
-    await t0.transfer(gov, web3.utils.toWei("40"), { from: POOL });
-    await t1.transfer(gov, "200000000", { from: POOL });
-    await t0.approve(NPM2, web3.utils.toWei("40"), { from: gov });
-    await t1.approve(NPM2, "200000000", { from: gov });
+    await t0.transfer(gov, web3.utils.toWei("40"), { from: WHALE });
+    await t1.transfer(gov, "200000000", { from: WHALE });
+    await t0.approve(NPM, web3.utils.toWei("40"), { from: gov });
+    await t1.approve(NPM, "200000000", { from: gov });
 
     const tick = parseInt((await (await IPool.at(POOL)).slot0())[1].toString(), 10);
     const lower = (Math.floor(tick / TS) - WIDTH / 2) * TS;
@@ -106,7 +97,7 @@ describe("CLVaultV2 — security and failure modes", function () {
     vault = await CLVaultV2.at(proxy.address);
     await nft.approve(vault.address, stakedId, { from: gov });
     await nft.approve(vault.address, bufferId, { from: gov });
-    await vault.initializeVault(addresses.Storage, stakedId, bufferId, NPM2, WIDTH, TARGET_BPS, BAND_BPS, SAFETY, { from: gov });
+    await vault.initializeVault(addresses.Storage, stakedId, bufferId, NPM, WIDTH, TARGET_BPS, BAND_BPS, SAFETY, { from: gov });
     await vault.setRebalanceHelper(HELPER, { from: gov });
     await vault.setRebalanceSafetyConfig(10000, 100, 120, 200, { from: gov });
     await vault.setRebalanceConfig(0, 5, gov, { from: gov });
@@ -118,6 +109,12 @@ describe("CLVaultV2 — security and failure modes", function () {
     await strategy.initializeBaseStrategy(addresses.Storage, vault.address, GAUGE, AERO, { from: gov });
     await vault.setStrategy(strategy.address, { from: gov });
     await vault.restakePosition({ from: gov });
+    snap = await hre.network.provider.send("evm_snapshot");
+  });
+
+  beforeEach(async () => {
+    await hre.network.provider.send("evm_revert", [snap]);
+    snap = await hre.network.provider.send("evm_snapshot");
   });
 
   // ==========================================================================================
@@ -127,7 +124,7 @@ describe("CLVaultV2 — security and failure modes", function () {
       // gauge window and permanently starve the vault of harvests AND range rebalances.
       await advance(WINDOW + SAFETY + 60);
       await expectRevert(() => vault.rebalanceStakeRatio({ from: attacker }),
-        "ErrNotRebalanceExecutor|revert", "rebalanceStakeRatio by attacker");
+        "ErrNotRebalanceExecutor", "rebalanceStakeRatio by attacker");
     });
 
     it("rebalanceCurrentTick, restakePosition and doHardWork reject outsiders", async () => {
@@ -159,16 +156,16 @@ describe("CLVaultV2 — security and failure modes", function () {
       await fund(user, "1", "5000000");
       await vault.setLanePause(true, false, false, false, { from: gov });
       await expectRevert(() => vault.deposit(web3.utils.toWei("1"), "5000000", 0, user, { from: user }),
-        "ErrDepositWithdrawPaused|revert", "deposit while paused");
+        "ErrDepositWithdrawPaused", "deposit while paused");
       await expectRevert(() => vault.withdraw("1", 0, 0, { from: gov }),
-        "ErrDepositWithdrawPaused|revert", "withdraw while paused");
+        "ErrDepositWithdrawPaused", "withdraw while paused");
     });
 
     it("withdrawOnly blocks deposits but still allows withdrawals", async () => {
       await fund(user, "1", "5000000");
       await vault.setLanePause(false, false, false, true, { from: gov });
       await expectRevert(() => vault.deposit(web3.utils.toWei("1"), "5000000", 0, user, { from: user }),
-        "ErrWithdrawOnly|revert", "deposit in withdrawOnly");
+        "ErrWithdrawOnly", "deposit in withdrawOnly");
       const before = BN(await vault.balanceOf(gov));
       await vault.withdraw(before.div(BN(100)).toString(), 0, 0, { from: gov });
       assert.equal(BN(await vault.balanceOf(gov)).lt(before), true, "withdrawals must remain open");
@@ -177,8 +174,8 @@ describe("CLVaultV2 — security and failure modes", function () {
     it("pauseRebalance blocks both rebalance paths", async () => {
       await advance(WINDOW + SAFETY + 60);
       await vault.setLanePause(false, false, true, false, { from: gov });
-      await expectRevert(() => vault.rebalanceCurrentTick(WIDTH, { from: gov }), "ErrRebalancePaused|revert", "range rebalance");
-      await expectRevert(() => vault.rebalanceStakeRatio({ from: gov }), "ErrRebalancePaused|revert", "ratio rebalance");
+      await expectRevert(() => vault.rebalanceCurrentTick(WIDTH, { from: gov }), "ErrRebalancePaused", "range rebalance");
+      await expectRevert(() => vault.rebalanceStakeRatio({ from: gov }), "ErrRebalancePaused", "ratio rebalance");
     });
   });
 
@@ -218,8 +215,8 @@ describe("CLVaultV2 — security and failure modes", function () {
       // Both flaws together meant it could not detect the very bug it was named for: a deposit priced
       // on a basis that excludes idle while the payout includes it. Measured extraction on that bug
       // was 80% of a donation, and this test stayed green throughout.
-      await t0.transfer(strategy.address, web3.utils.toWei("0.5"), { from: POOL });
-      await t1.transfer(vault.address, "2000000", { from: POOL });
+      await t0.transfer(strategy.address, web3.utils.toWei("0.5"), { from: WHALE });
+      await t1.transfer(vault.address, "2000000", { from: WHALE });
       const navL = BN(await vault.underlyingBalanceWithInvestment());
       const totalL = BN(await vault.totalLiquidity());
       assert.equal(navL.gt(totalL), true, "test premise: there must be idle available to extract");
@@ -257,25 +254,25 @@ describe("CLVaultV2 — security and failure modes", function () {
     it("harvest and rebalance stay blocked for the whole window, then open", async () => {
       const end = Number(await vault.stakeWindowEnd());
       assert.equal(await vault.isOutsideStakeWindow(), false, "must start inside the window");
-      await expectRevert(() => vault.rebalanceCurrentTick(WIDTH, { from: gov }), "ErrInsideStakeWindow|revert", "rebalance inside");
+      await expectRevert(() => vault.rebalanceCurrentTick(WIDTH, { from: gov }), "ErrInsideStakeWindow", "rebalance inside");
       assert.equal((await vault.checker())[0], false, "checker must not signal work it cannot do");
       await advance(WINDOW + SAFETY + 60);
       assert.equal(await vault.isOutsideStakeWindow(), true, `must be outside after the window (ends ${end})`);
     });
 
-    it("raising minStakeTime upstream is picked up live, not cached", async () => {
+    it("raising minStakeBlocks upstream is picked up live, not cached", async () => {
       await advance(WINDOW + SAFETY + 60);
-      assert.equal(await vault.isOutsideStakeWindow(), true, "outside at 300s");
-      // Aerodrome governance widens the window under a live vault.
-      await factory.methods.setMinStakeTime(POOL, 4 * 3600).send({ from: ADMIN, gas: 500000 });
+      assert.equal(await vault.isOutsideStakeWindow(), true, `outside at ${WINDOW} blocks`);
+      // The PENALTY_ADMIN Safe widens the window under a live vault (4h of 2s blocks).
+      await V3.setWindow(7200);
       assert.equal(await vault.isOutsideStakeWindow(), false, "a widened window must take effect immediately");
       assert.equal((await vault.checker())[0], false, "checker must follow the widened window");
-      console.log(`      minStakeTime 300s -> 4h; windowEnd now ${(await vault.stakeWindowEnd()).toString()}`);
+      console.log(`      minStakeBlocks ${WINDOW} -> 7200; windowEnd now ${(await vault.stakeWindowEnd()).toString()}`);
     });
 
     it("ratio rebalance is refused while the split is inside the band", async () => {
       await advance(WINDOW + SAFETY + 60);
-      await expectRevert(() => vault.rebalanceStakeRatio({ from: gov }), "ErrRatioInBand|revert", "in-band ratio rebalance");
+      await expectRevert(() => vault.rebalanceStakeRatio({ from: gov }), "ErrRatioInBand", "in-band ratio rebalance");
       console.log(`      stakedBps=${(await vault.stakedRatioBps()).toString()} target=${TARGET_BPS} band=${BAND_BPS} -> correctly refused`);
     });
   });
@@ -284,38 +281,38 @@ describe("CLVaultV2 — security and failure modes", function () {
   describe("degenerate inputs and states", function () {
     it("zero-value deposits and withdrawals are rejected, not silently accepted", async () => {
       await expectRevert(() => vault.deposit(0, 0, 0, user, { from: user }), "revert", "zero deposit");
-      await expectRevert(() => vault.withdraw(0, 0, 0, { from: gov }), "ErrZeroShares|revert", "zero withdraw");
+      await expectRevert(() => vault.withdraw(0, 0, 0, { from: gov }), "ErrZeroShares", "zero withdraw");
     });
 
     it("deposit to the zero address is rejected", async () => {
       await fund(user, "1", "5000000");
       await expectRevert(() => vault.deposit(web3.utils.toWei("1"), "5000000", 0, "0x" + "0".repeat(40), { from: user }),
-        "ErrZeroAddress|revert", "zero receiver");
+        "ErrZeroAddress", "zero receiver");
     });
 
     it("minShares slippage bound is enforced on deposit", async () => {
       await fund(user, "1", "5000000");
       const huge = BN(10).pow(BN(30)).toString();
       await expectRevert(() => vault.deposit(web3.utils.toWei("1"), "5000000", huge, user, { from: user }),
-        "ErrSlippage|revert", "unreachable minShares");
+        "ErrSlippage", "unreachable minShares");
     });
 
     it("stake config rejects nonsensical values (100% staked would remove the buffer entirely)", async () => {
-      await expectRevert(() => vault.setStakeConfig(10000, 500, 30, { from: gov }), "ErrBadConfig|revert", "100% staked");
-      await expectRevert(() => vault.setStakeConfig(0, 500, 30, { from: gov }), "ErrBadConfig|revert", "0% staked");
-      await expectRevert(() => vault.setStakeConfig(8000, 10000, 30, { from: gov }), "ErrBadConfig|revert", "band >= 100%");
+      await expectRevert(() => vault.setStakeConfig(10000, 500, 30, { from: gov }), "ErrBadConfig", "100% staked");
+      await expectRevert(() => vault.setStakeConfig(0, 500, 30, { from: gov }), "ErrBadConfig", "0% staked");
+      await expectRevert(() => vault.setStakeConfig(8000, 10000, 30, { from: gov }), "ErrBadConfig", "band >= 100%");
     });
 
     it("the buffer position cannot be pointed at the staked position", async () => {
       // Both slots holding one id would double-count the same liquidity in totalLiquidity().
       const staked = (await vault.posId()).toString();
       await expectRevert(() => vault.setBufferPosition(staked, { from: gov }),
-        "ErrBadConfig|ErrRangeMismatch|revert", "buffer == staked");
+        "ErrBadConfig|ErrRangeMismatch", "buffer == staked");
     });
 
     it("sweepStrayToken refuses the pool tokens", async () => {
-      await expectRevert(() => vault.sweepStrayToken(WETH, gov, { from: gov }), "ErrProtectedToken|revert", "sweep token0");
-      await expectRevert(() => vault.sweepStrayToken(CBBTC, gov, { from: gov }), "ErrProtectedToken|revert", "sweep token1");
+      await expectRevert(() => vault.sweepStrayToken(WETH, gov, { from: gov }), "ErrProtectedToken", "sweep token0");
+      await expectRevert(() => vault.sweepStrayToken(CBBTC, gov, { from: gov }), "ErrProtectedToken", "sweep token1");
     });
 
     it("strategy salvage refuses reward and pool tokens", async () => {
@@ -362,24 +359,24 @@ describe("CLVaultV2 — security and failure modes", function () {
 // ============================================================================================
 describe("CLVaultV2 — dust and full-exit edge cases", function () {
   this.timeout(3600000);
-  let gov, user, vault, strategy, npm, nft, t0, t1, factory, linked2 = false;
+  let gov, user, vault, strategy, npm, nft, t0, t1, linked2 = false, snap2;
   const evmNow = async () => Number((await web3.eth.getBlock("latest")).timestamp);
 
-  beforeEach(async () => {
+  before(async () => {
     const acc = await web3.eth.getAccounts();
     gov = addresses.Governance; user = acc[5];
-    await impersonates([gov, POOL, ADMIN]);
-    for (const a of [gov, user, POOL, ADMIN]) {
+    await impersonates([gov, WHALE]);
+    for (const a of [gov, user, WHALE]) {
       await hre.network.provider.request({ method: "hardhat_setBalance", params: [a, "0x21E19E0C9BAB2400000"] });
     }
     t0 = await IERC20.at(WETH); t1 = await IERC20.at(CBBTC);
-    npm = await IPosManager.at(NPM2); nft = await IERC721.at(NPM2);
-    factory = new web3.eth.Contract(FACTORY_ABI, FACTORY);
-    await factory.methods.setMinStakeTime(POOL, WINDOW).send({ from: ADMIN, gas: 500000 });
-    await t0.transfer(gov, web3.utils.toWei("40"), { from: POOL });
-    await t1.transfer(gov, "200000000", { from: POOL });
-    await t0.approve(NPM2, web3.utils.toWei("40"), { from: gov });
-    await t1.approve(NPM2, "200000000", { from: gov });
+    npm = await IPosManager.at(NPM); nft = await IERC721.at(NPM);
+    await V3.setWindow(WINDOW);
+    await V3.registerAeroV3Routes();
+    await t0.transfer(gov, web3.utils.toWei("40"), { from: WHALE });
+    await t1.transfer(gov, "200000000", { from: WHALE });
+    await t0.approve(NPM, web3.utils.toWei("40"), { from: gov });
+    await t1.approve(NPM, "200000000", { from: gov });
     const tick = parseInt((await (await IPool.at(POOL)).slot0())[1].toString(), 10);
     const lower = (Math.floor(tick / TS) - WIDTH / 2) * TS;
     const mint = async (w0, w1) => {
@@ -397,7 +394,7 @@ describe("CLVaultV2 — dust and full-exit edge cases", function () {
     vault = await CLVaultV2.at(proxy.address);
     await nft.approve(vault.address, stakedId, { from: gov });
     await nft.approve(vault.address, bufferId, { from: gov });
-    await vault.initializeVault(addresses.Storage, stakedId, bufferId, NPM2, WIDTH, TARGET_BPS, BAND_BPS, SAFETY, { from: gov });
+    await vault.initializeVault(addresses.Storage, stakedId, bufferId, NPM, WIDTH, TARGET_BPS, BAND_BPS, SAFETY, { from: gov });
     await vault.setRebalanceHelper(HELPER, { from: gov });
     await vault.setRebalanceSafetyConfig(10000, 100, 120, 200, { from: gov });
     await vault.setRebalanceConfig(0, 5, gov, { from: gov });
@@ -408,6 +405,12 @@ describe("CLVaultV2 — dust and full-exit edge cases", function () {
     await strategy.initializeBaseStrategy(addresses.Storage, vault.address, GAUGE, AERO, { from: gov });
     await vault.setStrategy(strategy.address, { from: gov });
     await vault.restakePosition({ from: gov });
+    snap2 = await hre.network.provider.send("evm_snapshot");
+  });
+
+  beforeEach(async () => {
+    await hre.network.provider.send("evm_revert", [snap2]);
+    snap2 = await hre.network.provider.send("evm_snapshot");
   });
 
   it("the LAST holder can redeem 100% of supply in one transaction", async () => {
@@ -443,13 +446,12 @@ describe("CLVaultV2 — dust and full-exit edge cases", function () {
     // Audit P3: minOut was derived from amountIn (tokenIn units) but passed as amountOutMin
     // (tokenOut units), so any tightening made every reward swap revert — silently, because
     // _swap swallows it. Harvests would keep 'succeeding' while AERO never compounded.
-    await hre.network.provider.send("evm_increaseTime", [WINDOW + SAFETY + 60]);
-    await hre.network.provider.send("evm_mine");
+    await V3.mine(WINDOW + SAFETY + 60);
     await strategy.setMaxSlippageBps(9900, { from: gov });
     const aero = await IERC20.at(AERO);
-    await impersonates([GAUGE]);
-    await hre.network.provider.request({ method: "hardhat_setBalance", params: [GAUGE, "0x21E19E0C9BAB2400000"] });
-    await aero.transfer(strategy.address, web3.utils.toWei("5"), { from: GAUGE });
+    // A V3 gauge mints on claim and holds no AERO, so take it from an AERO pool instead.
+    await V3.fund(AERO_WHALE);
+    await aero.transfer(strategy.address, web3.utils.toWei("5"), { from: AERO_WHALE });
     const skippedBefore = BN(await strategy.swapSkippedCount());
     const totalBefore = BN(await vault.totalLiquidity());
     await vault.doHardWork({ from: gov });
@@ -464,11 +466,10 @@ describe("CLVaultV2 — dust and full-exit edge cases", function () {
     // Audit P4: _claimAndCompound returned early below the gate, so collected fees and absorbed
     // move-residue sat in the strategy forever — owned by the vault, counted by nothing, and
     // withdrawable by no one.
-    await hre.network.provider.send("evm_increaseTime", [WINDOW + SAFETY + 60]);
-    await hre.network.provider.send("evm_mine");
+    await V3.mine(WINDOW + SAFETY + 60);
     await strategy.setMinRewardToCompound(AERO, web3.utils.toWei("1000000"), { from: gov }); // gate: effectively never
-    await t0.transfer(strategy.address, web3.utils.toWei("0.05"), { from: POOL });
-    await t1.transfer(strategy.address, "250000", { from: POOL });
+    await t0.transfer(strategy.address, web3.utils.toWei("0.05"), { from: WHALE });
+    await t1.transfer(strategy.address, "250000", { from: WHALE });
     const totalBefore = BN(await vault.totalLiquidity());
     await vault.doHardWork({ from: gov });
     const totalAfter = BN(await vault.totalLiquidity());

@@ -18,37 +18,32 @@ const IPool = artifacts.require("contracts/base/interface/concentrated-liquidity
 const IERC20 = artifacts.require("IERC20Upgradeable");
 const IERC721 = artifacts.require("IERC721");
 
-const NPM2 = "0xe1f8cd9AC4e4A65F54f38a5CdAfCA44f6dD68b53";
-const POOL = "0x42d4a22CaD0F5a49681a5715cE994Af73A43B76b";
-const GAUGE = "0x61E0B10423a0009C3f83ab4313813d29437d0817";
-const WETH = "0x4200000000000000000000000000000000000006";
-const CBBTC = "0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf";
-const AERO = "0x940181a94A35A4569E4529A3CDfB74e38FD98631";
-const TS = 10, WIDTH = 8, TARGET_BPS = 8000, BAND_BPS = 1000, SAFETY = 30;
+const V3 = require("../utilities/aero-v3-fixture.js");
+const { NPM, POOL, GAUGE, WHALE, AERO, WETH, CBBTC, TS } = V3;
+const WIDTH = 8, TARGET_BPS = 8000, BAND_BPS = 1000, SAFETY = 15; // safety is in BLOCKS
+V3.disableConfirmationListeners(CLVaultV2, VaultProxy, StrategyProxy, Strategy, CLRebalanceLibV2, Deployer, IPosManager, IPool, IERC20, IERC721);
 const BN = web3.utils.toBN;
 let linkedLib = null;
 
 describe("initialization front-running", function () {
   this.timeout(3600000);
-  let gov, attacker, npm, nft, vaultImpl, stratImpl, lower, upper;
+  let gov, attacker, npm, nft, vaultImpl, stratImpl, lower, upper, snap;
 
-  beforeEach(async () => {
-    await hre.network.provider.request({ method: "hardhat_reset", params: [{
-      forking: { jsonRpcUrl: hre.network.config.forking.url,
-                 blockNumber: hre.network.config.forking.blockNumber } }] });
+  // Built once and snapshotted per test (it used to hardhat_reset the fork for every test).
+  before(async () => {
     const acc = await web3.eth.getAccounts();
     gov = addresses.Governance; attacker = acc[5];
-    await impersonates([gov, POOL]);
-    for (const a of [gov, attacker, POOL]) {
+    await impersonates([gov, WHALE]);
+    for (const a of [gov, attacker, WHALE]) {
       await hre.network.provider.request({ method: "hardhat_setBalance", params: [a, "0x152D02C7E14AF6800000"] });
     }
-    npm = await IPosManager.at(NPM2); nft = await IERC721.at(NPM2);
+    npm = await IPosManager.at(NPM); nft = await IERC721.at(NPM);
     const t0 = await IERC20.at(WETH), t1 = await IERC20.at(CBBTC);
     for (const who of [gov, attacker]) {
-      await t0.transfer(who, web3.utils.toWei("20"), { from: POOL });
-      await t1.transfer(who, "100000000", { from: POOL });
-      await t0.approve(NPM2, web3.utils.toWei("20"), { from: who });
-      await t1.approve(NPM2, "100000000", { from: who });
+      await t0.transfer(who, web3.utils.toWei("20"), { from: WHALE });
+      await t1.transfer(who, "100000000", { from: WHALE });
+      await t0.approve(NPM, web3.utils.toWei("20"), { from: who });
+      await t1.approve(NPM, "100000000", { from: who });
     }
     const tick = parseInt((await (await IPool.at(POOL)).slot0())[1].toString(), 10);
     lower = (Math.floor(tick / TS) - WIDTH / 2) * TS; upper = lower + WIDTH * TS;
@@ -57,6 +52,12 @@ describe("initialization front-running", function () {
     assert.equal(lib.address, linkedLib, "library must redeploy to the linked address");
     vaultImpl = (await CLVaultV2.new({ from: gov })).address;
     stratImpl = (await Strategy.new({ from: gov })).address;
+    snap = await hre.network.provider.send("evm_snapshot");
+  });
+
+  beforeEach(async () => {
+    await hre.network.provider.send("evm_revert", [snap]);
+    snap = await hre.network.provider.send("evm_snapshot");
   });
 
   const mintSeed = async (who, w0, w1) => {
@@ -81,14 +82,14 @@ describe("initialization front-running", function () {
     const aBuffer = await mintSeed(attacker, web3.utils.toWei("1"), "5000000");
     await nft.approve(vault.address, aStaked, { from: attacker });
     await nft.approve(vault.address, aBuffer, { from: attacker });
-    await vault.initializeVault(addresses.Storage, aStaked, aBuffer, NPM2, WIDTH, TARGET_BPS, BAND_BPS, SAFETY, { from: attacker });
+    await vault.initializeVault(addresses.Storage, aStaked, aBuffer, NPM, WIDTH, TARGET_BPS, BAND_BPS, SAFETY, { from: attacker });
 
     // Step 2 of scripts/20 now reverts: the proxy is spent.
     await nft.approve(vault.address, stakedId, { from: gov });
     await nft.approve(vault.address, bufferId, { from: gov });
     let threw = false, msg = "";
     try {
-      await vault.initializeVault(addresses.Storage, stakedId, bufferId, NPM2, WIDTH, TARGET_BPS, BAND_BPS, SAFETY, { from: gov });
+      await vault.initializeVault(addresses.Storage, stakedId, bufferId, NPM, WIDTH, TARGET_BPS, BAND_BPS, SAFETY, { from: gov });
     } catch (e) { threw = true; msg = e.message; }
     console.log(`      deployer's initializeVault reverted=${threw}  ${msg.slice(0, 60)}`);
     assert.equal(threw, true, "premise: the second initializeVault must fail — that is the burn");
@@ -107,7 +108,7 @@ describe("initialization front-running", function () {
     await nft.approve(dep.address, stakedId, { from: gov });
     await nft.approve(dep.address, bufferId, { from: gov });
 
-    const rc = await dep.deployVault(vaultImpl, addresses.Storage, stakedId, bufferId, NPM2,
+    const rc = await dep.deployVault(vaultImpl, addresses.Storage, stakedId, bufferId, NPM,
       WIDTH, TARGET_BPS, BAND_BPS, SAFETY, { from: gov });
     const ev = rc.logs.find(l => l.event === "VaultDeployed");
     const vault = await CLVaultV2.at(ev.args.vault);
@@ -129,7 +130,7 @@ describe("initialization front-running", function () {
     // And the proxy cannot be front-run, because it did not exist before it was initialized.
     let threw = false;
     try {
-      await vault.initializeVault(addresses.Storage, stakedId, bufferId, NPM2, WIDTH, TARGET_BPS, BAND_BPS, SAFETY, { from: attacker });
+      await vault.initializeVault(addresses.Storage, stakedId, bufferId, NPM, WIDTH, TARGET_BPS, BAND_BPS, SAFETY, { from: attacker });
     } catch (e) { threw = true; }
     assert.equal(threw, true, "the vault must already be initialized");
   });
@@ -140,7 +141,7 @@ describe("initialization front-running", function () {
     const dep = await Deployer.new({ from: gov });
     await nft.approve(dep.address, stakedId, { from: gov });
     await nft.approve(dep.address, bufferId, { from: gov });
-    const rc = await dep.deployVault(vaultImpl, addresses.Storage, stakedId, bufferId, NPM2,
+    const rc = await dep.deployVault(vaultImpl, addresses.Storage, stakedId, bufferId, NPM,
       WIDTH, TARGET_BPS, BAND_BPS, SAFETY, { from: gov });
     const vaultAddr = rc.logs.find(l => l.event === "VaultDeployed").args.vault;
 

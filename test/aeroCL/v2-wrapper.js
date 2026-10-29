@@ -19,46 +19,41 @@ const IERC20 = artifacts.require("IERC20Upgradeable");
 const IERC721 = artifacts.require("IERC721");
 const PriceMover = artifacts.require("CLPoolPriceMover");
 const MockTickMath = artifacts.require("MockTickMath");
+const MockLossyUL = artifacts.require("MockLossyUL");
 
-const NPM2 = "0xe1f8cd9AC4e4A65F54f38a5CdAfCA44f6dD68b53";
-const POOL = "0x42d4a22CaD0F5a49681a5715cE994Af73A43B76b";
-const GAUGE = "0x61E0B10423a0009C3f83ab4313813d29437d0817";
-const FACTORY = "0x385293CaE378C813F16f0C1334d774AdDDf56AbB";
-const ADMIN = "0xE6A41fE61E7a1996B59d508661e3f524d6A32075";
-const AERO = "0x940181a94A35A4569E4529A3CDfB74e38FD98631";
-const WETH = "0x4200000000000000000000000000000000000006";
-const CBBTC = "0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf";
-const HELPER = "0x74a343dECf3b4578B07D0F7b7577aB2f3c4762b2";
-const TS = 10, WIDTH = 8, WINDOW = 300;
-const TARGET_BPS = 8000, BAND_BPS = 1000, SAFETY = 30;
+const V3 = require("../utilities/aero-v3-fixture.js");
+const { NPM, POOL, GAUGE, WHALE, AERO, WETH, CBBTC, HELPER, TS, WINDOW } = V3;
+const WIDTH = 8;
+const TARGET_BPS = 8000, BAND_BPS = 1000, SAFETY = 15; // window and safety are in BLOCKS
+// Price pushes are bounded by their sqrtPriceLimit; this only has to reach it in the V3 pool,
+// which is ~30x deeper than the F2 pool they were sized for.
+const PUSH_WETH = "60000";
 const BN = web3.utils.toBN;
-const FACTORY_ABI = [{ name: "setMinStakeTime", type: "function", stateMutability: "nonpayable",
-  inputs: [{ name: "p", type: "address" }, { name: "v", type: "uint256" }], outputs: [] }];
+V3.disableConfirmationListeners(VaultProxy, StrategyProxy, CLVaultV2, CLRebalanceLibV2, Strategy, CLWrapperV2, ICLRebalanceHelper, IPosManager, IERC20, IERC721, PriceMover, MockTickMath, MockLossyUL);
 
 let linkedLibAddr = null;
 
 describe("CLWrapperV2 (twin-position WETH/cbBTC)", function () {
   this.timeout(3600000);
-  let gov, u1, u2, vault, strategy, npm, nft, t0, t1, w0, w1;
+  let gov, u1, u2, vault, strategy, npm, nft, t0, t1, w0, w1, snap;
 
-  beforeEach(async () => {
-    await hre.network.provider.request({ method: "hardhat_reset", params: [{
-      forking: { jsonRpcUrl: hre.network.config.forking.url, blockNumber: hre.network.config.forking.blockNumber },
-    }] });
+  // Built once and snapshotted per test (it used to hardhat_reset the fork for every test).
+  before(async () => {
     const acc = await web3.eth.getAccounts();
     gov = addresses.Governance; u1 = acc[5]; u2 = acc[6];
-    await impersonates([gov, POOL, ADMIN]);
-    for (const a of [gov, u1, u2, POOL, ADMIN]) {
+    await impersonates([gov, WHALE]);
+    for (const a of [gov, u1, u2, WHALE]) {
       await hre.network.provider.request({ method: "hardhat_setBalance", params: [a, "0x152D02C7E14AF6800000"] });
     }
-    await new web3.eth.Contract(FACTORY_ABI, FACTORY).methods.setMinStakeTime(POOL, WINDOW).send({ from: ADMIN, gas: 500000 });
+    await V3.setWindow(WINDOW);
+    await V3.registerAeroV3Routes();
 
     t0 = await IERC20.at(WETH); t1 = await IERC20.at(CBBTC);
-    npm = await IPosManager.at(NPM2); nft = await IERC721.at(NPM2);
-    await t0.transfer(gov, web3.utils.toWei("40"), { from: POOL });
-    await t1.transfer(gov, "200000000", { from: POOL });
-    await t0.approve(NPM2, web3.utils.toWei("40"), { from: gov });
-    await t1.approve(NPM2, "200000000", { from: gov });
+    npm = await IPosManager.at(NPM); nft = await IERC721.at(NPM);
+    await t0.transfer(gov, web3.utils.toWei("40"), { from: WHALE });
+    await t1.transfer(gov, "200000000", { from: WHALE });
+    await t0.approve(NPM, web3.utils.toWei("40"), { from: gov });
+    await t1.approve(NPM, "200000000", { from: gov });
 
     const now = Number((await web3.eth.getBlock("latest")).timestamp);
     const IPool = artifacts.require("contracts/base/interface/concentrated-liquidity/IPool.sol:IPool");
@@ -83,7 +78,7 @@ describe("CLWrapperV2 (twin-position WETH/cbBTC)", function () {
     vault = await CLVaultV2.at((await VaultProxy.new(impl.address, { from: gov })).address);
     await nft.approve(vault.address, stakedId, { from: gov });
     await nft.approve(vault.address, bufferId, { from: gov });
-    await vault.initializeVault(addresses.Storage, stakedId, bufferId, NPM2, WIDTH, TARGET_BPS, BAND_BPS, SAFETY, { from: gov });
+    await vault.initializeVault(addresses.Storage, stakedId, bufferId, NPM, WIDTH, TARGET_BPS, BAND_BPS, SAFETY, { from: gov });
     await vault.setRebalanceHelper(HELPER, { from: gov });
     await vault.setRebalanceSafetyConfig(10000, 100, 120, 200, { from: gov });
     await vault.setRebalanceConfig(0, 5, gov, { from: gov });
@@ -99,6 +94,12 @@ describe("CLWrapperV2 (twin-position WETH/cbBTC)", function () {
     // it can only be built after the vault is fully configured.
     w0 = await CLWrapperV2.new(addresses.Storage, vault.address, true, { from: gov });   // asset = token0
     w1 = await CLWrapperV2.new(addresses.Storage, vault.address, false, { from: gov });  // asset = token1
+    snap = await hre.network.provider.send("evm_snapshot");
+  });
+
+  beforeEach(async () => {
+    await hre.network.provider.send("evm_revert", [snap]);
+    snap = await hre.network.provider.send("evm_snapshot");
   });
 
   // NOTE: these tests deliberately run at the UNTOUCHED previewSafetyBps default of 25. The 2-arg
@@ -115,26 +116,26 @@ describe("CLWrapperV2 (twin-position WETH/cbBTC)", function () {
     const tm = await MockTickMath.new({ from: gov });
     const acc = await web3.eth.getAccounts();
     await hre.network.provider.request({ method: "hardhat_setBalance", params: [acc[8], "0x152D02C7E14AF6800000"] });
-    await web3.eth.sendTransaction({ from: acc[8], to: WETH, value: web3.utils.toWei("600"), gas: 200000 });
-    await t0.transfer(mover.address, web3.utils.toWei("600"), { from: acc[8] });
+    await web3.eth.sendTransaction({ from: acc[8], to: WETH, value: web3.utils.toWei(PUSH_WETH), gas: 200000 });
+    await t0.transfer(mover.address, web3.utils.toWei(PUSH_WETH), { from: acc[8] });
     const lower = parseInt((await vault.tickLower()).toString(), 10);
     const target = Math.floor((lower - 30) / TS) * TS;
-    await mover.move(POOL, true, web3.utils.toWei("600"), (await tm.getSqrtRatioAtTick(target)).toString(), { from: gov });
+    await mover.move(POOL, true, web3.utils.toWei(PUSH_WETH), (await tm.getSqrtRatioAtTick(target)).toString(), { from: gov });
     const IPool = artifacts.require("contracts/base/interface/concentrated-liquidity/IPool.sol:IPool");
     const tick = parseInt((await (await IPool.at(POOL)).slot0())[1].toString(), 10);
     assert.equal(tick < lower, true, `test premise: pool must be below the range (tick ${tick}, lower ${lower})`);
-    await t1.transfer(strategy.address, "250000", { from: POOL }); // unusable side
+    await t1.transfer(strategy.address, "250000", { from: WHALE }); // unusable side
     return tick;
   }
 
   async function fundAsset(who, wrapper) {
     const asset = await wrapper.asset();
     if (asset.toLowerCase() === WETH.toLowerCase()) {
-      await t0.transfer(who, web3.utils.toWei("2"), { from: POOL });
+      await t0.transfer(who, web3.utils.toWei("2"), { from: WHALE });
       await t0.approve(wrapper.address, web3.utils.toWei("2"), { from: who });
       return { tok: t0, amt: web3.utils.toWei("1") };
     }
-    await t1.transfer(who, "20000000", { from: POOL });
+    await t1.transfer(who, "20000000", { from: WHALE });
     await t1.approve(wrapper.address, "20000000", { from: who });
     return { tok: t1, amt: "5000000" };
   }
@@ -153,8 +154,8 @@ describe("CLWrapperV2 (twin-position WETH/cbBTC)", function () {
       // buffer's share (2000bps here) and mint every depositor ~25% too many shares.
       const helper = await ICLRebalanceHelper.at(HELPER);
       const lower = await vault.tickLower(), upper = await vault.tickUpper();
-      const st = await helper.getCurrentTokenAmounts(POOL, NPM2, await vault.posId(), lower, upper);
-      const bf = await helper.getCurrentTokenAmounts(POOL, NPM2, await vault.bufferPosId(), lower, upper);
+      const st = await helper.getCurrentTokenAmounts(POOL, NPM, await vault.posId(), lower, upper);
+      const bf = await helper.getCurrentTokenAmounts(POOL, NPM, await vault.bufferPosId(), lower, upper);
       const both = await vault.getCurrentTokenAmounts();
       assert.equal(BN(bf[0]).gt(BN(0)) || BN(bf[1]).gt(BN(0)), true, "test premise: the buffer must hold something");
       assert.equal(BN(both[0]).eq(BN(st[0]).add(BN(bf[0]))), true, "vault NAV must sum both positions");
@@ -173,7 +174,7 @@ describe("CLWrapperV2 (twin-position WETH/cbBTC)", function () {
       const before = BN(await vault.underlyingBalanceWithInvestment());
       const totalL = BN(await vault.totalLiquidity());
       assert.equal(before.gte(totalL), true, "NAV must be at least the NFT liquidity");
-      await t0.transfer(strategy.address, web3.utils.toWei("1"), { from: POOL });
+      await t0.transfer(strategy.address, web3.utils.toWei("1"), { from: WHALE });
       const after = BN(await vault.underlyingBalanceWithInvestment());
       console.log(`      NAV ${before} -> ${after} after 1 WETH idle (totalLiquidity stayed ${(await vault.totalLiquidity()).toString()})`);
       assert.equal(after.gt(before), true, "idle on the strategy must raise NAV");
@@ -191,8 +192,8 @@ describe("CLWrapperV2 (twin-position WETH/cbBTC)", function () {
       // stays defensive. What is tested is the property that makes it correct.
       const helper = await ICLRebalanceHelper.at(HELPER);
       const lower = await vault.tickLower(), upper = await vault.tickUpper();
-      const fromStaked = await helper.getCurrentTokenWeights(POOL, NPM2, await vault.posId(), lower, upper);
-      const fromBuffer = await helper.getCurrentTokenWeights(POOL, NPM2, await vault.bufferPosId(), lower, upper);
+      const fromStaked = await helper.getCurrentTokenWeights(POOL, NPM, await vault.posId(), lower, upper);
+      const fromBuffer = await helper.getCurrentTokenWeights(POOL, NPM, await vault.bufferPosId(), lower, upper);
       const viaVault = await vault.getCurrentTokenWeights();
       console.log(`      staked=(${fromStaked[0]}, ${fromStaked[1]})  buffer=(${fromBuffer[0]}, ${fromBuffer[1]})`);
       assert.equal(BN(fromStaked[0]).gt(BN(0)) && BN(fromBuffer[0]).gt(BN(0)), true, "premise: both positions hold value");
@@ -219,8 +220,8 @@ describe("CLWrapperV2 (twin-position WETH/cbBTC)", function () {
       // position with no trading, a withdrawal collects ZERO fees and the test would assert nothing.
       // In range, both sides are foldable — which is exactly the case that made the NAV read differ
       // across the fold by integer rounding.
-      await t0.transfer(strategy.address, web3.utils.toWei("0.03"), { from: POOL });
-      await t1.transfer(strategy.address, "150000", { from: POOL });
+      await t0.transfer(strategy.address, web3.utils.toWei("0.03"), { from: WHALE });
+      await t1.transfer(strategy.address, "150000", { from: WHALE });
       const s0 = BN(await t0.balanceOf(strategy.address)), s1 = BN(await t1.balanceOf(strategy.address));
       console.log(`      foldable two-sided idle on the strategy: token0=${s0} token1=${s1}`);
       assert.equal(s0.gt(BN(0)) && s1.gt(BN(0)), true, "test premise: both sides must be present and foldable");
@@ -262,7 +263,7 @@ describe("CLWrapperV2 (twin-position WETH/cbBTC)", function () {
       await w0.methods["deposit(uint256,address)"](amt, u1, { from: u1 });
       const shares = BN(await vault.balanceOf(u1));
 
-      await t0.transfer(vault.address, web3.utils.toWei("1"), { from: POOL });
+      await t0.transfer(vault.address, web3.utils.toWei("1"), { from: WHALE });
       const idle = BN(await t0.balanceOf(vault.address));
       const nav = BN(await w0.totalAssets());
       const bps = idle.mul(BN(10000)).div(nav);
@@ -294,9 +295,23 @@ describe("CLWrapperV2 (twin-position WETH/cbBTC)", function () {
       // NAV-based floor here; that was removed because it read pre-flush NAV while the vault reads
       // post-flush, which is not integer-invariant and bricked deposits.)
       assert.equal((await w0.previewSafetyBps()).toString(), "25", "premise: still at the V1 default");
+      // Recreate the friction that put the F2 deposit below its preview. The V3 pool is so deep that
+      // a 1 WETH swap has almost no impact and lands ABOVE the 25bps-haircut preview, which would void
+      // the premise below. So swap on the pool under test (the default ts1 route sits ~60bps off ts10
+      // spot in this fork) through a UL that withholds 80bps: inside the wrapper's 100bps swap bound,
+      // yet enough to put the mint below the preview the old design used as its minimum.
+      await V3.setWethCbbtcRouteSpacing(TS);
+      const controller = new web3.eth.Contract([
+        { name: "universalLiquidator", type: "function", stateMutability: "view", inputs: [], outputs: [{ name: "", type: "address" }] },
+        { name: "setUniversalLiquidator", type: "function", stateMutability: "nonpayable", inputs: [{ name: "u", type: "address" }], outputs: [] },
+      ], addresses.Controller);
+      const realUL = await controller.methods.universalLiquidator().call();
+      const lossy = await MockLossyUL.new(realUL, 80, { from: gov });
+      await controller.methods.setUniversalLiquidator(lossy.address).send({ from: gov, gas: 500000 });
       const { amt } = await fundAsset(u1, w0);
       const preview = BN(await w0.previewDeposit(amt));
       await w0.methods["deposit(uint256,address)"](amt, u1, { from: u1 });
+      await controller.methods.setUniversalLiquidator(realUL).send({ from: gov, gas: 500000 });
       const minted = BN(await vault.balanceOf(u1));
       const ratio = minted.mul(BN(10000)).div(preview);
       console.log(`      minted ${minted} vs preview ${preview} = ${ratio}bps (would have reverted below 10000 before)`);
