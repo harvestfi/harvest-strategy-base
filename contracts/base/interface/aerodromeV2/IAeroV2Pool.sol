@@ -13,12 +13,22 @@ interface IAeroV2Pool {
 
   function token1() external view returns (address);
 
+  /// @notice The IAeroV2PoolFactory that created the pool
+  function factory() external view returns (address);
+
   function totalSupply() external view returns (uint256);
 
   function getReserves() external view returns (uint256 reserve0, uint256 reserve1, uint256 blockTimestampLast);
 
   /// @notice Swap output for `amountIn` of `tokenIn`, after the pool's base fee
   function getAmountOut(uint256 amountIn, address tokenIn) external view returns (uint256);
+
+  /// @notice Swap output for `amountIn` of `tokenIn` after the full fee the caller pays in this transaction
+  /// (base fee plus any MEV tax), i.e. what swap() will accept
+  function getAmountOutWithTotalFee(uint256 amountIn, address tokenIn) external view returns (uint256);
+
+  /// @notice Sends the requested outputs to `to`; the inputs must have been sent to the pool beforehand
+  function swap(uint256 amount0Out, uint256 amount1Out, address to, bytes calldata data) external;
 
   /// @notice Mints LP to `to` for the tokens sent to the pool beforehand
   function mint(address to) external returns (uint256 liquidity);

@@ -8,6 +8,7 @@ import "../../base/upgradability/BaseUpgradeableStrategy.sol";
 import "../../base/interface/aerodromeV2/IAeroV2Gauge.sol";
 import "../../base/interface/aerodromeV2/IAeroV2GaugeFactory.sol";
 import "../../base/interface/aerodromeV2/IAeroV2Pool.sol";
+import "../../base/interface/aerodromeV2/IAeroV2PoolFactory.sol";
 import "../../base/interface/aerodromeV2/IVaultInvestFlags.sol";
 
 /**
@@ -23,13 +24,26 @@ abstract contract AerodromeV2Strategy is BaseUpgradeableStrategy {
 
   /// @dev Reward balances below this are dust: not worth liquidating, and RewardForwarder.notifyFee reverts on 0 fees
   uint256 internal constant MIN_REWARD = 1e13;
-  /// @dev Fraction of reserve0 used to probe the pool's marginal price when splitting rewards
+  /// @dev Fraction of a reserve used to probe the pool's marginal price
   uint256 internal constant PRICE_PROBE_DIVISOR = 10_000;
   uint256 internal constant DEFAULT_STAKE_SPACING = 10;
   uint256 internal constant MAX_STAKE_SPACING = 1_000;
+  /// @dev About a day of Base blocks (0.2 s each since November 2026): even with no window the strategy stakes at most
+  /// this often, so a window that Aero switches on later (it also covers existing stakes) is unlikely to find a recent
+  /// stake. Blocks, like Aero's windows, so the odds stay the same if the block time changes again.
+  uint256 internal constant DEFAULT_MIN_STAKE_INTERVAL = 432_000;
+  /// @dev About 30 days of Base blocks
+  uint256 internal constant MAX_MIN_STAKE_INTERVAL = 12_960_000;
+  /// @dev Gas a gauge withdraw needs on top of what Aero reserves for its gauge tape (gaugeTapeGasLimit)
+  uint256 internal constant GAUGE_EXIT_GAS = 1_000_000;
+  /// @dev Gas kept back from a best-effort gauge withdraw, so the emergencyWithdraw fallback can still run when the
+  /// withdraw burns all the gas it was given
+  uint256 internal constant GAUGE_FALLBACK_GAS = 200_000;
 
   // additional storage slots (on top of BaseUpgradeableStrategy ones) are defined here
   bytes32 internal constant _STAKE_SPACING_SLOT = 0xdb0c127b40d22d3cc92da10472a99818c8393b96aea0d59174d5e551aad38274;
+  bytes32 internal constant _MIN_STAKE_INTERVAL_SLOT = 0x6a65b92997f3c14d085295437048ef3e20a5e80bba1236eeed73772906057b3c;
+  bytes32 internal constant _LAST_STAKE_BLOCK_SLOT = 0x8b4eba188c0b0c912b87240da63577b062e97cdcb05acaea868c9b6a05b7c18a;
 
   event GaugeChanged(address oldGauge, address newGauge);
   event HardWorkSkipped();
@@ -40,10 +54,14 @@ abstract contract AerodromeV2Strategy is BaseUpgradeableStrategy {
   event LiquidationFailed(bytes reason);
   event GaugeExitFailed(bytes reason);
   event StakeSpacingChanged(uint256 stakeSpacing);
+  event MinStakeIntervalChanged(uint256 minStakeInterval);
+  event UnstakedFromInactiveGauge(uint256 amount);
   event RewardTokenRemoved(address token);
 
   constructor() BaseUpgradeableStrategy() {
     assert(_STAKE_SPACING_SLOT == bytes32(uint256(keccak256("eip1967.strategyStorage.stakeSpacing")) - 1));
+    assert(_MIN_STAKE_INTERVAL_SLOT == bytes32(uint256(keccak256("eip1967.strategyStorage.minStakeInterval")) - 1));
+    assert(_LAST_STAKE_BLOCK_SLOT == bytes32(uint256(keccak256("eip1967.strategyStorage.lastStakeBlock")) - 1));
   }
 
   /**
@@ -65,12 +83,15 @@ abstract contract AerodromeV2Strategy is BaseUpgradeableStrategy {
     require(IAeroV2Pool(_underlying).POOL_TYPE() == _poolType(), "Pool type mismatch");
     require(IAeroV2Gauge(_gauge).stakingToken() == _underlying, "Underlying mismatch");
     setUint256(_STAKE_SPACING_SLOT, DEFAULT_STAKE_SPACING);
+    setUint256(_MIN_STAKE_INTERVAL_SLOT, DEFAULT_MIN_STAKE_INTERVAL);
   }
 
   /**
    * @notice Claims AERO, compounds it into LP and stakes idle LP, without ever losing rewards to the penalty window.
    * @dev Inside a penalty window it skips the claim and the stake (no revert); rewards stay in the gauge until a
-   * later run. Fee claims, liquidation and the gauge deposit are isolated so none of them can block the others.
+   * later run. Fee claims, liquidation and the gauge deposit are isolated so none of them can block the others,
+   * except for Aero's own gas check (_revertOnGasFailure): that reverts the hard work, so a keeper that sent too little
+   * gas retries with more instead of silently skipping a step.
    */
   function doHardWork() external restricted {
     // User deposits/withdrawals must never reach the gauge: each deposit would restart the penalty window
@@ -83,6 +104,7 @@ abstract contract AerodromeV2Strategy is BaseUpgradeableStrategy {
     try IAeroV2Pool(underlying()).claimFees(address(this)) {} catch {}
     bool claimed = _claimRewards();
     try this.liquidateRewards() {} catch (bytes memory reason) {
+      _revertOnGasFailure(reason);
       emit LiquidationFailed(reason);
     }
     _stakeIdle(claimed);
@@ -110,49 +132,66 @@ abstract contract AerodromeV2Strategy is BaseUpgradeableStrategy {
     try gauge.claimEmissions(address(this), address(this)) {
       return true;
     } catch (bytes memory reason) {
+      _revertOnGasFailure(reason);
       emit ClaimFailed(reason);
       return false;
     }
   }
 
+  /**
+   * @dev Stakes idle LP when that cannot cost rewards: after a successful claim while Aero enforces a window, and not
+   * before _nextStakeBlock. A switched-off gauge pays no AERO and its stakers get no pool fees, so it gets no new LP
+   * and its stake is taken out, right after a successful claim (nothing left to forfeit), to earn pool fees instead.
+   */
   function _stakeIdle(bool claimed) internal {
     address underlying_ = underlying();
+    address gauge = rewardPool();
+    IAeroV2GaugeFactory factory = IAeroV2GaugeFactory(IAeroV2Gauge(gauge).gaugeFactory());
+    if (factory.emissionCap(gauge) == 0) {
+      uint256 staked = _rewardPoolBalance();
+      if (staked > 0 && claimed && _withdrawFromGauge(staked, true)) {
+        emit UnstakedFromInactiveGauge(staked);
+      }
+      uint256 unstaked = IERC20(underlying_).balanceOf(address(this));
+      if (unstaked > 0) {
+        emit StakeSkipped(unstaked);
+      }
+      return;
+    }
     uint256 idle = IERC20(underlying_).balanceOf(address(this));
     if (idle == 0) {
       return;
     }
-    address gauge = rewardPool();
-    IAeroV2GaugeFactory factory = IAeroV2GaugeFactory(IAeroV2Gauge(gauge).gaugeFactory());
     IAeroV2GaugeFactory.PenaltyConfig memory config = factory.effectivePenaltyConfig(gauge);
-    if (config.minStakeBlocks > 0 && config.penaltyRate > 0) {
-      if (!claimed || block.number < _nextStakeBlock(gauge, config.minStakeBlocks)) {
-        emit StakeSkipped(idle);
-        return;
-      }
-    }
-    // A switched-off gauge pays no AERO and its stakers get no pool fees: keep the LP unstaked instead
-    if (factory.emissionCap(gauge) == 0) {
+    bool windowEnforced = config.minStakeBlocks > 0 && config.penaltyRate > 0;
+    if ((windowEnforced && !claimed) || block.number < _nextStakeBlock(gauge, config)) {
       emit StakeSkipped(idle);
       return;
     }
     IERC20(underlying_).safeApprove(gauge, 0);
     IERC20(underlying_).safeApprove(gauge, idle);
-    try IAeroV2Gauge(gauge).deposit(idle) {} catch (bytes memory reason) {
+    try IAeroV2Gauge(gauge).deposit(idle) {
+      setUint256(_LAST_STAKE_BLOCK_SLOT, block.number);
+    } catch (bytes memory reason) {
+      _revertOnGasFailure(reason);
       IERC20(underlying_).safeApprove(gauge, 0);
       emit StakeFailed(reason);
     }
   }
 
   /**
-   * @dev Sells any extra reward tokens for the main reward token, takes the protocol fees, then turns the rest into LP.
+   * @dev Sells any extra reward tokens for the main reward token, takes the protocol fees on it and swaps the rest into
+   * the pool's tokens, then turns all the pool tokens the strategy holds into LP: the swap proceeds, the pool fees
+   * claimed for idle LP and earlier leftovers, with or without a reward sale (even with selling switched off).
    */
   function _liquidateRewards() internal {
+    address _rewardToken = rewardToken();
     if (!sell()) {
       emit ProfitsNotCollected(sell(), false);
+      _compoundPoolTokens(_rewardToken, IERC20(_rewardToken).balanceOf(address(this)));
       return;
     }
 
-    address _rewardToken = rewardToken();
     address _universalLiquidator = universalLiquidator();
     address[] memory _rewardTokens = rewardTokens();
     for (uint256 i = 0; i < _rewardTokens.length; i++) {
@@ -167,24 +206,28 @@ abstract contract AerodromeV2Strategy is BaseUpgradeableStrategy {
       IERC20(token).safeApprove(_universalLiquidator, 0);
       IERC20(token).safeApprove(_universalLiquidator, balance);
       try IUniversalLiquidator(_universalLiquidator).swap(token, _rewardToken, balance, 1, address(this)) {} catch (bytes memory reason) {
+        _revertOnGasFailure(reason);
         IERC20(token).safeApprove(_universalLiquidator, 0);
         emit LiquidationFailed(reason);
       }
     }
 
+    // Reward dust waits for a later claim: it is neither sold nor added to the pool before its fees are taken
+    bool rewardSold = false;
     uint256 rewardBalance = IERC20(_rewardToken).balanceOf(address(this));
-    if (rewardBalance < MIN_REWARD) {
-      return;
+    if (rewardBalance >= MIN_REWARD) {
+      _notifyProfitInRewardToken(_rewardToken, rewardBalance);
+      uint256 remainingRewardBalance = IERC20(_rewardToken).balanceOf(address(this));
+      if (remainingRewardBalance >= MIN_REWARD) {
+        _swapRewardIntoPoolTokens(_rewardToken, remainingRewardBalance, _universalLiquidator);
+        rewardSold = true;
+      }
     }
-    _notifyProfitInRewardToken(_rewardToken, rewardBalance);
-    uint256 remainingRewardBalance = IERC20(_rewardToken).balanceOf(address(this));
-    if (remainingRewardBalance < MIN_REWARD) {
-      return;
-    }
-    _addLiquidity(_rewardToken, remainingRewardBalance, _universalLiquidator);
+    _compoundPoolTokens(_rewardToken, rewardSold ? 0 : IERC20(_rewardToken).balanceOf(address(this)));
   }
 
-  function _addLiquidity(address _rewardToken, uint256 _amount, address _universalLiquidator) internal {
+  /// @dev Splits `_amount` of the reward token by the pool's value shares and swaps it into the pool's tokens
+  function _swapRewardIntoPoolTokens(address _rewardToken, uint256 _amount, address _universalLiquidator) internal {
     IAeroV2Pool pool = IAeroV2Pool(underlying());
     address token0 = pool.token0();
     address token1 = pool.token1();
@@ -193,14 +236,7 @@ abstract contract AerodromeV2Strategy is BaseUpgradeableStrategy {
     if (reserve0 == 0 || reserve1 == 0) {
       return;
     }
-    uint256 value0 = reserve1;
-    uint256 probe = reserve0 / PRICE_PROBE_DIVISOR;
-    if (probe > 0) {
-      uint256 probeOut = pool.getAmountOut(probe, token0);
-      if (probeOut > 0) {
-        value0 = probeOut * PRICE_PROBE_DIVISOR;
-      }
-    }
+    uint256 value0 = _reserveValue(pool, token0, reserve0, reserve1);
     uint256 toToken0 = _amount * value0 / (value0 + reserve1);
     uint256 toToken1 = _amount - toToken0;
 
@@ -213,11 +249,40 @@ abstract contract AerodromeV2Strategy is BaseUpgradeableStrategy {
     if (token1 != _rewardToken && toToken1 > 0) {
       IUniversalLiquidator(_universalLiquidator).swap(_rewardToken, token1, toToken1, 1, address(this));
     }
+  }
+
+  /**
+   * @dev Turns the pool tokens the strategy holds into LP. First the side in excess of the pool's ratio has the part of
+   * its surplus that belongs to the other side (the other side's value share) swapped through the pool itself.
+   * @param reserved Reward-token balance to leave out (rewards whose fees have not been taken: dust, or everything
+   * while selling is switched off)
+   */
+  function _compoundPoolTokens(address _rewardToken, uint256 reserved) internal {
+    IAeroV2Pool pool = IAeroV2Pool(underlying());
+    address token0 = pool.token0();
+    address token1 = pool.token1();
+    uint256 amount0 = _poolTokenBalance(token0, _rewardToken, reserved);
+    uint256 amount1 = _poolTokenBalance(token1, _rewardToken, reserved);
+    if (amount0 == 0 && amount1 == 0) {
+      return;
+    }
+    (uint256 reserve0, uint256 reserve1,) = pool.getReserves();
+    if (reserve0 == 0 || reserve1 == 0) {
+      return;
+    }
+    uint256 amount1Optimal = amount0 * reserve1 / reserve0;
+    if (amount1 > amount1Optimal) {
+      uint256 value1 = _reserveValue(pool, token1, reserve1, reserve0);
+      _swapInPool(pool, token0, token1, (amount1 - amount1Optimal) * reserve0 / (reserve0 + value1));
+    } else {
+      uint256 value0 = _reserveValue(pool, token0, reserve0, reserve1);
+      _swapInPool(pool, token0, token0, (amount0 - amount1 * reserve0 / reserve1) * reserve1 / (reserve1 + value0));
+    }
 
     (reserve0, reserve1,) = pool.getReserves();
-    uint256 amount0 = IERC20(token0).balanceOf(address(this));
-    uint256 amount1 = IERC20(token1).balanceOf(address(this));
-    uint256 amount1Optimal = amount0 * reserve1 / reserve0;
+    amount0 = _poolTokenBalance(token0, _rewardToken, reserved);
+    amount1 = _poolTokenBalance(token1, _rewardToken, reserved);
+    amount1Optimal = amount0 * reserve1 / reserve0;
     if (amount1Optimal <= amount1) {
       amount1 = amount1Optimal;
     } else {
@@ -232,22 +297,69 @@ abstract contract AerodromeV2Strategy is BaseUpgradeableStrategy {
     pool.mint(address(this));
   }
 
+  function _poolTokenBalance(address token, address _rewardToken, uint256 reserved) internal view returns (uint256) {
+    uint256 balance = IERC20(token).balanceOf(address(this));
+    return token == _rewardToken ? balance - reserved : balance;
+  }
+
+  /// @dev `reserveIn` of `tokenIn` valued in the other pool token at the pool's own marginal price, net of the swap fee
+  /// (`reserveOut`, an even split, for dust reserves). A probe moves the price it measures (by about
+  /// 1/PRICE_PROBE_DIVISOR on a volatile pool), so the pool is probed with one and with two probe sizes and the price is
+  /// extrapolated to a trade of zero size, which cancels that effect to first order.
+  function _reserveValue(IAeroV2Pool pool, address tokenIn, uint256 reserveIn, uint256 reserveOut)
+    internal
+    view
+    returns (uint256 value)
+  {
+    value = reserveOut;
+    uint256 probe = reserveIn / PRICE_PROBE_DIVISOR;
+    if (probe > 0) {
+      uint256 probeOut = pool.getAmountOut(probe, tokenIn);
+      uint256 doubleProbeOut = pool.getAmountOut(2 * probe, tokenIn);
+      // a pool's quote is concave, so doubleProbeOut <= 2 * probeOut + 1 (rounding) < 4 * probeOut once probeOut > 0:
+      // the second check only keeps a broken quote from underflowing (the fallback applies instead)
+      if (probeOut > 0 && doubleProbeOut < 4 * probeOut) {
+        value = (4 * probeOut - doubleProbeOut) * reserveIn / (2 * probe);
+      }
+    }
+  }
+
+  /// @dev Swaps `amountIn` of `tokenIn` for the other pool token through the pool itself, quoted with the pool's full
+  /// fee for this transaction so that the swap always passes the pool's own check. Skipped while Aero has paused swaps
+  /// (minting still works), so that a pause cannot undo the reward sale and the fees taken before it.
+  function _swapInPool(IAeroV2Pool pool, address token0, address tokenIn, uint256 amountIn) internal {
+    if (amountIn == 0 || IAeroV2PoolFactory(pool.factory()).isPaused()) {
+      return;
+    }
+    uint256 amountOut = pool.getAmountOutWithTotalFee(amountIn, tokenIn);
+    if (amountOut == 0) {
+      return;
+    }
+    IERC20(tokenIn).safeTransfer(address(pool), amountIn);
+    if (tokenIn == token0) {
+      pool.swap(0, amountOut, address(this), "");
+    } else {
+      pool.swap(amountOut, 0, address(this), "");
+    }
+  }
+
   function withdrawToVault(uint256 _amount) public restricted {
     address underlying_ = underlying();
     uint256 idle = IERC20(underlying_).balanceOf(address(this));
     if (_amount > idle) {
-      _withdrawFromGauge(Math.min(_rewardPoolBalance(), _amount - idle), true);
+      _withdrawFromGauge(Math.min(_rewardPoolBalance(), _amount - idle), false);
     }
     IERC20(underlying_).safeTransfer(vault(), _amount);
   }
 
   /**
    * @notice Unstakes everything and sends all underlying to the vault. Used by vault.withdrawAll, rebalance,
-   * setStrategy (migration) and the last-share withdrawal, so it must always work immediately.
+   * setStrategy (migration) and the last-share withdrawal, so nothing after the unstake can block it. If the gauge
+   * itself fails, governance's emergencyExit takes the stake out first.
    */
   function withdrawAllToVault() public restricted {
     address gauge = rewardPool();
-    _withdrawFromGauge(_rewardPoolBalance(), true);
+    _withdrawFromGauge(_rewardPoolBalance(), false);
     // Nothing is staked any more, so there is no penalty window: this only collects emissions deferred by a failed mint
     try IAeroV2Gauge(gauge).claimEmissions(address(this), address(this)) {} catch {}
     try IAeroV2Pool(underlying()).claimFees(address(this)) {} catch {}
@@ -259,11 +371,12 @@ abstract contract AerodromeV2Strategy is BaseUpgradeableStrategy {
   }
 
   /**
-   * @notice Pauses investing and unstakes everything; a genuine gauge failure does not undo the pause.
+   * @notice Pauses investing and unstakes everything. The only exit that falls back to Aero's emergencyWithdraw
+   * (forfeiting unclaimed AERO) when the gauge's withdraw fails; a failure of both does not undo the pause.
    */
   function emergencyExit() public onlyGovernance {
     _setPausedInvesting(true);
-    _withdrawFromGauge(_rewardPoolBalance(), false);
+    _withdrawFromGauge(_rewardPoolBalance(), true);
     emit ToggledEmergencyState(true);
   }
 
@@ -277,41 +390,62 @@ abstract contract AerodromeV2Strategy is BaseUpgradeableStrategy {
 
   /**
    * @dev Unstakes `amount` from the gauge. No penalty-window check on purpose (exits must always work).
-   * If gauge.withdraw itself fails on Aero's side, falls back to emergencyWithdraw when Aero has enabled it.
-   * A failure caused by the caller's gas limit is always re-raised, so it can never trigger that fallback.
-   * @param revertOnFailure Re-raise an Aero-side failure, or emit GaugeExitFailed and return false (emergencyExit).
+   * @param bestEffort False for user withdrawals, withdrawAll and gauge migration: any gauge failure reverts, so none
+   * of them can leave a stake behind or be steered into emergencyWithdraw by its gas limit. True for governance's
+   * emergencyExit and for the hard work leaving a switched-off gauge right after a claim: see _tryExitGauge.
+   * @return exited False when a best-effort exit failed (GaugeExitFailed was emitted)
    */
-  function _withdrawFromGauge(uint256 amount, bool revertOnFailure) internal returns (bool) {
+  function _withdrawFromGauge(uint256 amount, bool bestEffort) internal returns (bool exited) {
     if (amount == 0) {
       return true;
     }
     IAeroV2Gauge gauge = IAeroV2Gauge(rewardPool());
-    try gauge.withdraw(amount) {
+    if (bestEffort) {
+      exited = _tryExitGauge(gauge, amount);
+    } else {
+      gauge.withdraw(amount);
+      exited = true;
+    }
+    if (exited && gauge.balanceOf(address(this)) == 0) {
+      setUint256(_LAST_STAKE_BLOCK_SLOT, 0); // nothing staked any more, so the next stake need not wait
+    }
+  }
+
+  /**
+   * @dev Withdraws `amount`, falling back to emergencyWithdraw (which forfeits unclaimed AERO) when the gauge fails and
+   * Aero has enabled it. The caller must send enough gas for the whole gauge call, several times what a withdraw
+   * normally needs, and part of it is kept back for the fallback: too little gas reverts before the gauge is called,
+   * and a withdraw that burns all its gas still leaves enough for the fallback. Aero's own gas check is re-raised.
+   * @return False, after emitting GaugeExitFailed, when both fail
+   */
+  function _tryExitGauge(IAeroV2Gauge gauge, uint256 amount) internal returns (bool) {
+    IAeroV2GaugeFactory factory = IAeroV2GaugeFactory(gauge.gaugeFactory());
+    require(
+      gasleft() >= uint256(factory.gaugeTapeGasLimit()) + GAUGE_EXIT_GAS + GAUGE_FALLBACK_GAS,
+      "Not enough gas for the gauge"
+    );
+    try gauge.withdraw{gas: gasleft() - GAUGE_FALLBACK_GAS}(amount) {
       return true;
     } catch (bytes memory reason) {
-      if (_isGasFailure(reason)) {
-        _revertWith(reason);
-      }
-      if (IAeroV2GaugeFactory(gauge.gaugeFactory()).emergencyWithdrawEnabled()) {
+      _revertOnGasFailure(reason);
+      if (factory.emergencyWithdrawEnabled()) {
         try gauge.emergencyWithdraw(amount) {
           return true;
         } catch (bytes memory emergencyReason) {
           reason = emergencyReason;
         }
       }
-      if (revertOnFailure) {
-        _revertWith(reason);
-      }
       emit GaugeExitFailed(reason);
       return false;
     }
   }
 
-  /// @dev True when the gauge call failed because of the caller's gas limit: it ran out of gas (no revert data),
-  /// or Aero's own gas check rejected it (the gauge tape needs more than gaugeTapeGasLimit, set by Aero)
-  function _isGasFailure(bytes memory reason) internal pure returns (bool) {
-    return reason.length == 0
-      || keccak256(reason) == keccak256(abi.encodeWithSelector(IAeroV2GaugeFactory.InsufficientGasForCall.selector));
+  /// @dev Re-raises a failure from Aero's own gas check (a gauge or pool tape needing more gas than was left): more gas
+  /// fixes it, so it never justifies skipping a step or leaving through emergencyWithdraw
+  function _revertOnGasFailure(bytes memory reason) internal pure {
+    if (keccak256(reason) == keccak256(abi.encodeWithSelector(IAeroV2GaugeFactory.InsufficientGasForCall.selector))) {
+      _revertWith(reason);
+    }
   }
 
   function _revertWith(bytes memory reason) internal pure {
@@ -355,13 +489,38 @@ abstract contract AerodromeV2Strategy is BaseUpgradeableStrategy {
     return getUint256(_STAKE_SPACING_SLOT);
   }
 
-  /// @dev First block at which _stakeIdle may deposit again: stakeSpacing window lengths after the last deposit
-  function _nextStakeBlock(address gauge, uint256 minStakeBlocks) internal view returns (uint256) {
-    uint256 lastDepositBlock = IAeroV2Gauge(gauge).depositBlock(address(this));
-    if (lastDepositBlock == 0) {
+  /**
+   * @notice Minimum number of blocks between the strategy's gauge deposits, whether or not Aero enforces a window.
+   */
+  function minStakeInterval() public view returns (uint256) {
+    return getUint256(_MIN_STAKE_INTERVAL_SLOT);
+  }
+
+  /**
+   * @notice Block of the strategy's last gauge deposit; 0 when nothing is staked.
+   */
+  function lastStakeBlock() public view returns (uint256) {
+    return getUint256(_LAST_STAKE_BLOCK_SLOT);
+  }
+
+  /// @dev First block at which _stakeIdle may deposit again (0 when nothing is staked): minStakeInterval blocks after
+  /// the strategy's own last deposit, and while Aero enforces a window, also stakeSpacing window lengths after the
+  /// gauge's depositBlock. The interval cannot count from depositBlock: with no window, anyone can reset it for the
+  /// strategy through depositFor, which would postpone staking indefinitely.
+  function _nextStakeBlock(address gauge, IAeroV2GaugeFactory.PenaltyConfig memory config)
+    internal
+    view
+    returns (uint256 next)
+  {
+    uint256 lastStake = lastStakeBlock();
+    if (lastStake == 0) {
       return 0;
     }
-    return lastDepositBlock + Math.max(1, stakeSpacing()) * minStakeBlocks;
+    next = lastStake + minStakeInterval();
+    if (config.minStakeBlocks > 0 && config.penaltyRate > 0) {
+      uint256 windowSpacing = Math.max(1, stakeSpacing()) * config.minStakeBlocks;
+      next = Math.max(next, IAeroV2Gauge(gauge).depositBlock(address(this)) + windowSpacing);
+    }
   }
 
   function _rewardPoolBalance() internal view returns (uint256) {
@@ -392,6 +551,19 @@ abstract contract AerodromeV2Strategy is BaseUpgradeableStrategy {
     require(_stakeSpacing >= 1 && _stakeSpacing <= MAX_STAKE_SPACING, "Invalid stake spacing");
     setUint256(_STAKE_SPACING_SLOT, _stakeSpacing);
     emit StakeSpacingChanged(_stakeSpacing);
+  }
+
+  /**
+   * @notice Sets the minimum number of blocks between the strategy's gauge deposits, which applies even when Aero
+   * enforces no window.
+   * @dev Higher = a window that Aero switches on later is less likely to find a recent stake, but new LP waits longer to
+   * earn emissions. 0 lets every hard work stake while there is no window. Outsiders can still make the stake look
+   * recent while there is no window, by staking for the strategy through gauge.depositFor; nothing here can stop that.
+   */
+  function setMinStakeInterval(uint256 _minStakeInterval) external onlyGovernance {
+    require(_minStakeInterval <= MAX_MIN_STAKE_INTERVAL, "Invalid stake interval");
+    setUint256(_MIN_STAKE_INTERVAL_SLOT, _minStakeInterval);
+    emit MinStakeIntervalChanged(_minStakeInterval);
   }
 
   /**
@@ -443,11 +615,13 @@ abstract contract AerodromeV2Strategy is BaseUpgradeableStrategy {
 
   /**
    * @notice Moves the stake to a new gauge of the same pool. The next doHardWork stakes into it.
+   * @dev Reverts if the old gauge's withdraw fails, so the stake is never left behind; emergencyExit can take it out
+   * first.
    */
   function setGauge(address _newGauge) external onlyGovernance {
     require(IAeroV2Gauge(_newGauge).stakingToken() == underlying(), "Underlying mismatch");
     address oldGauge = rewardPool();
-    _withdrawFromGauge(_rewardPoolBalance(), true);
+    _withdrawFromGauge(_rewardPoolBalance(), false);
     // Nothing is staked in the old gauge any more (no window): collect emissions deferred by a failed mint
     try IAeroV2Gauge(oldGauge).claimEmissions(address(this), address(this)) {} catch {}
     _setRewardPool(_newGauge);
